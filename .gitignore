@@ -1,0 +1,9 @@
+# PlatformIO
+.pio/
+compile_commands.json
+.cache/
+
+# Editor / OS
+.DS_Store
+.vendor/
+.clangd-cache/
