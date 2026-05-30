@@ -7,3 +7,14 @@ compile_commands.json
 .DS_Store
 .vendor/
 .clangd-cache/
+
+# Obsidian
+.obsidian
+
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+dist/
+*.egg-info/
