@@ -1,9 +1,5 @@
-from robot_friend.main import greet
+from robot_friend.person.person_recognizer import YOLOModel
 
 
-def test_greet_default():
-    assert greet() == "Hello, World"
-
-
-def test_greet_named():
-    assert greet("Finch") == "Hello, Finch"
+def test_yolo_name():
+    assert YOLOModel.YOLO_V8N.value == 'yolov8n.pt'
