@@ -1,0 +1,11 @@
+# Install / sync Python dependencies.
+sync:
+  uv sync --dev
+
+# Run the Python test suite.
+test:
+  uv run pytest
+
+# Run the robot-friend CLI entrypoint.
+run *args:
+  uv run robot-friend {{args}}
