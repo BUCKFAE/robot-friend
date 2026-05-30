@@ -34,3 +34,6 @@ jobs:
 
       - name: Build firmware for Uno
         run: pio run -e uno
+
+      - name: Build firmware for Robot
+        run: pio run -e robot
