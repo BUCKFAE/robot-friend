@@ -35,6 +35,10 @@ Each subdirectory has its own `justfile` — you can also `cd arduino && just te
 `arduino/compile_commands.json` (clangd's project database) is regenerated
 automatically by every `just arduino` recipe.
 
+### Using Obsidian
+
+Install [Obsidian](https://obsidian.md/) and open the `FinchObsidian/` folder as a vault for the project notes.
+
 ### Using VSCode
 
 Install the [PlatformIO IDE](https://marketplace.visualstudio.com/items?itemName=platformio.platformio-ide)
