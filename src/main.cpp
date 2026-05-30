@@ -3,14 +3,28 @@
 
 int ledPin = 13;
 
-void setup() { Serial.begin(9600); }
+void setup() { 
+    Serial.begin(9600); 
+    Serial.println("Ready for mischief!");
+}
+
+boolean ledState = 0;
+
+String formatOnboardState() {
+    return (ledState) ? "On" : "Off";
+}
+
+void toggleOnboard() {
+    digitalWrite(ledPin, ledState);
+    Serial.println("Changed LED to " + formatOnboardState());
+    ledState = !ledState;
+}
 
 void loop() {
-  Serial.println(add(2, 3));
 
-  digitalWrite(ledPin, HIGH);
-  delay(5000);
-  Serial.println("LOW");
-  digitalWrite(ledPin, LOW);
-  delay(100);
+    toggleOnboard();
+
+    // Example: use something from lib
+    int secondsToDelay = add(1, 1) * 1000;
+    delay(secondsToDelay);
 }
