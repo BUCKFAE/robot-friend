@@ -37,3 +37,25 @@ jobs:
 
       - name: Build firmware for Robot
         run: pio run -e robot
+
+  python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: robot_friend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Sync dependencies
+        run: uv sync --dev
+
+      - name: Run tests
+        run: uv run pytest
