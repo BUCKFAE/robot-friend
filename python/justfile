@@ -6,6 +6,9 @@ sync:
 test:
   uv run pytest
 
+download-models:
+    uv run src/robot_friend/scripts/download_models.py
+
 # Run the robot-friend CLI entrypoint.
 run *args:
   uv run robot-friend {{args}}
