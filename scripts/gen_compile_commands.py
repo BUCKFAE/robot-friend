@@ -38,6 +38,27 @@ def fatal(msg: str) -> NoReturn:
     sys.exit(2)
 
 
+def watch_paths() -> list[Path]:
+    """Paths whose mtime invalidates compile_commands.json."""
+    out = [ROOT / "platformio.ini"]
+    # Directory mtimes change when files are added/removed inside them, so
+    # watching each lib/<Name>/ and test/test_<name>/ catches new sources
+    # without scanning every file.
+    for parent in (LIB_DIR, TEST_DIR):
+        if parent.exists():
+            out.append(parent)
+            out += [p for p in parent.iterdir() if p.is_dir()]
+    return out
+
+
+def is_stale() -> bool:
+    if not DB.exists():
+        return True
+    db_mtime = DB.stat().st_mtime
+    return any(p.exists() and p.stat().st_mtime > db_mtime
+               for p in watch_paths())
+
+
 def find_pio() -> str:
     pio = shutil.which("pio") or shutil.which("platformio")
     if not pio:
@@ -139,7 +160,16 @@ def main() -> int:
         "--skip-deps", action="store_true",
         help="don't try to fetch Unity (use existing .pio/libdeps)",
     )
+    parser.add_argument(
+        "-f", "--force", action="store_true",
+        help="regenerate even if compile_commands.json looks up to date",
+    )
     args = parser.parse_args()
+
+    if not args.force and not is_stale():
+        print("compile_commands.json is up to date — nothing to do "
+              "(pass --force to regenerate anyway)")
+        return 0
 
     pio = find_pio()
     cxx = find_host_cxx()
