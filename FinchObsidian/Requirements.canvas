@@ -1,0 +1,15 @@
+{
+	"nodes":[
+		{"id":"e042225dd5f2a5e5","type":"group","x":-328,"y":120,"width":488,"height":570,"label":"Leon"},
+		{"id":"a40c67fc5303448f","type":"group","x":200,"y":120,"width":420,"height":540,"label":"Julian"},
+		{"id":"6fa83012cc606baa","type":"text","text":"## Finch\n> Cute Robot-Pet for the FabLab\n\n- Cute face / sounds\n- Go around the are and map its surroundings","x":-308,"y":-180,"width":448,"height":200},
+		{"id":"ccd90a5d3acd9cc3","type":"text","text":"## Sensors\n\n- Camera\n- XBOX Kinect (?)\n- Lidar\n\t- We have them and Leon knows how  to use them","x":-308,"y":140,"width":448,"height":214},
+		{"id":"0a5ab9b3887479e2","type":"text","text":"## Hardware\n- Motors\n\t- Mobility\n\t- Secondary (Screen / Camera)\n- Case\n- Face expression\n\t- Cute LED screen\n- Sounds\n- Fancy switches / buttons","x":-308,"y":370,"width":448,"height":300},
+		{"id":"1b6f4c49bd66a4f4","type":"text","text":"## What does AI do?\n\n- Should make it act like a pet\n\t- Detect if person is present\n\t- Follow the person around\n- Emotion recognition\n- Voice Recognition / Commands\n","x":220,"y":400,"width":380,"height":240},
+		{"id":"7833ff5dc207b2e0","type":"text","text":"## AI\n- Input: Sensor data\n- Output: \n\t- Where to go\n\t- Face expression / sounds","x":220,"y":140,"width":380,"height":200},
+		{"id":"1632fb1dbfe95472","type":"text","text":"## Rules\n- **NO SENSITIVE DATA** stored on the robot\n\t- Faces\n- No network connection","x":220,"y":-361,"width":380,"height":181}
+	],
+	"edges":[
+		{"id":"9970669934e774a2","fromNode":"7833ff5dc207b2e0","fromSide":"bottom","toNode":"1b6f4c49bd66a4f4","toSide":"top"}
+	]
+}
