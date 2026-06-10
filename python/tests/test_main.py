@@ -1,4 +1,4 @@
-from robot_friend.person.person_recognizer import YOLOModel
+from robot_friend.detection.backends.ultralytics.YOLODetector import YOLOModel
 
 
 def test_yolo_name():

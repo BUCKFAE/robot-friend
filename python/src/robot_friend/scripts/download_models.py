@@ -1,9 +1,9 @@
 import shutil
 from pathlib import Path
 
-from robot_friend.person.person_recognizer import YOLOModel
 from ultralytics.utils.downloads import attempt_download_asset
 
+from robot_friend.detection.backends.ultralytics.YOLODetector import YOLOModel
 from robot_friend.resource_handler import get_model_dir
 from robot_friend.utils.clean_setup_dir import clean_setup_dir
 

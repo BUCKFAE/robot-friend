@@ -2,7 +2,7 @@ import sys
 
 import cv2
 
-from robot_friend.person.person_recognizer import YoloDetector, YOLOModel
+from robot_friend.detection.backends.ultralytics.YOLODetector import YoloDetector, YOLOModel
 from robot_friend.resource_handler import get_model_dir
 
 
@@ -12,18 +12,17 @@ def main() -> None:
 
     detector = YoloDetector(YOLOModel.YOLO_V8N)
 
-    # 0 is for webcam
-    # TODO: Helper for cv2
-    cap = cv2.VideoCapture(0)
+    # Use camera with index 0
+    cap = cv2.VideoCapture(index=0)
 
     if not cap.isOpened():
-        sys.exit(f"cannot open webcam")
+        sys.exit("cannot open webcam")
 
     while True:
         ok, frame = cap.read()
         if not ok:
             break
-        boxes = detector.recognize_persons(frame)
+        boxes = detector.detect(frame)
         if not boxes:
             continue
 

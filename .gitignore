@@ -8,6 +8,7 @@ compile_commands.json
 .vendor/
 .clangd-cache/
 .idea/
+python/python.iml
 
 # Obsidian
 .obsidian
