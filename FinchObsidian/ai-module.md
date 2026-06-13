@@ -1,5 +1,4 @@
 # AI Module
 
-We will use the `AI HAT` (or something similar)
+The PI has the AI HAT+ with 26 TOPS, meaning we need the Hailo-8 models (not Hailo-8l)
 
-- *AI Hat+*:https://www.raspberrypi.com/products/ai-hat/
