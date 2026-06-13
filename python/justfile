@@ -1,6 +1,14 @@
-# Install / sync Python dependencies.
+# Install / sync Python dependencies (includes the YOLO-on-CPU backend).
 sync:
-  uv sync --dev
+  uv sync --dev --extra yolo
+
+# Pi variant: skips torch/ultralytics (inference runs on the AI HAT) and
+# exposes the apt-installed picamera2/Hailo bindings to the venv. The venv
+# must be built from the SYSTEM interpreter — a uv-managed python cannot see
+# apt-installed packages even with system-site-packages.
+sync-pi:
+  { grep -qs '^home = /usr/bin' .venv/pyvenv.cfg && grep -qsi 'include-system-site-packages = true' .venv/pyvenv.cfg; } || { rm -rf .venv && uv venv --system-site-packages --python /usr/bin/python3; }
+  UV_PYTHON=/usr/bin/python3 uv sync --dev
 
 # Run the Python test suite.
 test:

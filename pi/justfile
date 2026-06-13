@@ -1,0 +1,84 @@
+# All recipes run on your dev machine and talk to the Pi over ssh.
+# `host` is an ssh alias from ~/.ssh/config; point a single call at another
+# Pi with e.g. `PI_HOST=finch-lab just pi::run`.
+host := env("PI_HOST", "finch-home")
+remote_dir := "robot-friend"
+mjpeg_port := "8081"
+
+# Never rsynced to the Pi. The Pi keeps its own .venv (created by setup.sh)
+# and doesn't need git history or the laptop-only YOLO models.
+rsync_excludes := " \
+    --exclude=.git \
+    --exclude=.venv \
+    --exclude=__pycache__ \
+    --exclude=.pytest_cache \
+    --exclude=.cache \
+    --exclude=.pio \
+    --exclude=.idea \
+    --exclude=.obsidian \
+    --exclude=/python/data \
+"
+
+repo_root := parent_directory(source_directory())
+
+_default:
+    just --list
+
+# Fail fast if the Pi isn't reachable over ssh (so upload/setup/run can't half-run against a dead host).
+validate-connection:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Validating ssh connection to {{host}}..."
+    if ! ssh -o BatchMode=yes -o ConnectTimeout=5 {{host}} true 2>/dev/null; then
+        echo "error: cannot reach '{{host}}' over ssh." >&2
+        echo "  - is the Pi powered on and on the network?" >&2
+        echo "  - is '{{host}}' an ssh alias in ~/.ssh/config (or set PI_HOST)?" >&2
+        echo "  - is your ssh key authorized on the Pi? (BatchMode needs key auth)" >&2
+        exit 1
+    fi
+    echo "ok: '{{host}}' is reachable"
+
+# Sync the repo to the Pi.
+upload: validate-connection
+  @echo "Uploading to {{host}}:{{remote_dir}}"
+  rsync -az --delete {{rsync_excludes}} "{{repo_root}}/" "{{host}}:{{remote_dir}}/"
+
+# Provision the Pi (Hailo, PCIe Gen 3, uv + just, Python env) — idempotent, reboot once afterwards.
+setup: upload
+  @echo "Setting up the new pi..."
+  ssh -t {{host}} '{{remote_dir}}/pi/setup.sh'
+
+# Verify the AI HAT and camera are detected (run after reboot).
+check:
+  ssh {{host}} 'lspci | grep -i hailo && ls /dev/hailo0 && hailortcli fw-control identify && rpicam-hello --list-cameras'
+
+# Upload, run person detection on the AI HAT, and open the annotated live view.
+run *args: upload
+  #!/usr/bin/env bash
+  set -euo pipefail
+  ssh {{host}} 'export HAILO_MONITOR=1 PATH="$HOME/.local/bin:$PATH" UV_PYTHON=/usr/bin/python3; pkill -f "[.]venv/bin/robot-friend" 2>/dev/null; cd {{remote_dir}} && just python::sync-pi && cd python && uv run robot-friend --port {{mjpeg_port}} {{args}}' &
+  ssh_pid=$!
+  trap 'kill $ssh_pid 2>/dev/null' EXIT
+  pi_ip=$(ssh -G {{host}} | awk '/^hostname /{print $2}')
+  until (exec 3<> "/dev/tcp/$pi_ip/{{mjpeg_port}}") 2>/dev/null; do
+    kill -0 $ssh_pid 2>/dev/null || { echo "remote run exited before the stream came up" >&2; exit 1; }
+    sleep 1
+  done
+  just connect
+
+# Watch the raw Pi camera with no robot-friend code: start an H.264 TCP stream on the Pi and view it.
+stream port="8554":
+  #!/usr/bin/env bash
+  set -euo pipefail
+  ssh {{host}} 'rpicam-vid -t 0 -n --inline --listen -o tcp://0.0.0.0:{{port}}' &
+  ssh_pid=$!
+  trap 'kill $ssh_pid 2>/dev/null; ssh {{host}} "pkill -f rpicam-vid" 2>/dev/null' EXIT
+  pi_ip=$(ssh -G {{host}} | awk '/^hostname /{print $2}')
+  # rpicam-vid --listen serves a single client, so wait for the listen socket
+  # via ss (which never opens it) rather than probing the port ourselves.
+  ssh {{host}} 'until ss -ltn 2>/dev/null | grep -q ":{{port}} "; do sleep 0.3; done'
+  ffplay -fflags nobuffer -flags low_delay "tcp://$pi_ip:{{port}}"
+
+# View the annotated MJPEG view that `just pi::run` serves from main.py (HTTP, not raw TCP).
+connect:
+  ffplay -fflags nobuffer -flags low_delay "http://$(ssh -G {{host}} | awk '/^hostname /{print $2}'):{{mjpeg_port}}/"

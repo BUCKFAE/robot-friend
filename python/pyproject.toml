@@ -5,7 +5,14 @@ description = "Python side of robot-friend"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "numpy>=1.26",
     "opencv-python>=4.13.0.92",
+]
+
+# Laptop-only backend; on the Pi inference runs on the AI HAT via the
+# apt-installed Hailo stack instead (see pi/setup.sh).
+[project.optional-dependencies]
+yolo = [
     "torch>=2.12.0",
     "ultralytics>=8.4.57",
 ]

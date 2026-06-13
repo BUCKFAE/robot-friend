@@ -1,40 +1,55 @@
-import sys
+import argparse
+from robot_friend.mjpeg import MJPEGServer
 
 import cv2
 
-from robot_friend.detection.backends.ultralytics.YOLODetector import YoloDetector, YOLOModel
-from robot_friend.resource_handler import get_model_dir
+from robot_friend.camera import open_camera
+from robot_friend.detection.detection_factory import DetectionFactory
+from robot_friend.utils.get_current_host import is_pi_host
 
 
 def main() -> None:
-    model_dir = get_model_dir()
-    print(model_dir)
+    parser = argparse.ArgumentParser(description='robot-friend person detection')
+    parser.add_argument('--port', type=int, metavar='PORT', default=8081,
+                        help="Port to serve the annotated camera view as MJPEG on")
 
-    detector = YoloDetector(YOLOModel.YOLO_V8N)
+    args = parser.parse_args()
 
-    # Use camera with index 0
-    cap = cv2.VideoCapture(index=0)
+    detector = DetectionFactory.get_detector()
 
-    if not cap.isOpened():
-        sys.exit("cannot open webcam")
+    # The Pi is headless: serve the annotated view as MJPEG rather than opening a
+    # local OpenCV/Qt window, which aborts the process when there is no display.
+    headless = is_pi_host()
+    server: MJPEGServer | None = None
+    if headless:
+        server = MJPEGServer(args.port)
+        print(f'serving annotated view on http://0.0.0.0:{args.port}/', flush=True)
 
-    while True:
-        ok, frame = cap.read()
-        if not ok:
-            break
-        boxes = detector.detect(frame)
-        if not boxes:
-            continue
+    with open_camera() as camera:
+        print(f'Running: {type(detector).__name__} + {type(camera).__name__}', flush=True)
+        try:
+            while True:
+                frame = camera.read()
+                if frame is None:
+                    break
+                boxes = detector.detect(frame)
 
-        for b in boxes:
-            cv2.rectangle(frame, (b.bounding_box.x1, b.bounding_box.y1), (b.bounding_box.x2, b.bounding_box.y2), (0, 255, 0), 2)
-        cv2.imshow("presence", frame)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
+                for b in boxes:
+                    cv2.rectangle(frame, (b.bounding_box.x1, b.bounding_box.y1),
+                                  (b.bounding_box.x2, b.bounding_box.y2), (0, 255, 0), 2)
 
-    cap.release()
+                if server:
+                    server.publish(frame)
 
-    cv2.destroyAllWindows()
+                if not headless:
+                    cv2.imshow('presence', frame)
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        break
+        except KeyboardInterrupt:
+            pass
+
+    if not headless:
+        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":

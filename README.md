@@ -1,11 +1,12 @@
 # Robot Friend
 
-The repo is split into two top-level modules:
+The repo is split into three top-level modules:
 
 - `arduino/` — PlatformIO firmware (sketch, libs, tests, clangd setup).
 - `python/` — host-side Python package, managed with `uv`.
+- `pi/` — Raspberry Pi provisioning (setup script, systemd service).
 
-The top-level `justfile` exposes both as [just modules](https://just.systems/man/en/modules.html).
+The top-level `justfile` exposes them as [just modules](https://just.systems/man/en/modules.html).
 
 ## Getting Started
 
@@ -25,6 +26,30 @@ just python run            # invoke the robot-friend CLI
 ```
 
 Each subdirectory has its own `justfile` — you can also `cd arduino && just test`.
+
+## Raspberry Pi setup
+
+Flash Raspberry Pi OS (64-bit, Bookworm or newer) with the
+[Raspberry Pi Imager](https://www.raspberrypi.com/software/) — set hostname,
+user, wifi and enable SSH in the Imager's customization dialog. Then add an
+ssh alias for the Pi to `~/.ssh/config` on your dev machine and `ssh-copy-id` your key
+
+```
+Host finch-home
+    HostName <pi-ip>
+    User finch
+```
+
+### Camera over ssh
+
+The Pi runs headless and serves video over the network; the live view (ffplay)
+opens on your dev machine:
+
+```sh
+just pi::run                # detect on the AI HAT, serve the annotated MJPEG view + open it
+just pi::connect            # view the MJPEG stream served by a running `just pi::run`
+just pi::stream             # raw camera, H.264 over TCP, no robot-friend code + open it
+```
 
 ### Arduino layout
 
