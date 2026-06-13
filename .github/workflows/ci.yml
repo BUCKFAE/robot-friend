@@ -58,7 +58,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Sync dependencies
-        run: uv sync --dev
+        run: uv sync --dev --extra yolo
 
       - name: Run tests
         run: uv run pytest
