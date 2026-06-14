@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 
+from robot_friend.utils.get_current_host import is_pi_host
+
 
 class Camera(ABC):
     """A source of BGR uint8 frames (OpenCV convention)."""
@@ -60,12 +62,8 @@ class PiCamera(Camera):
         self._picam.close()
 
 
-def open_camera(kind: str = "auto", index: int = 0) -> Camera:
-    if kind == "picamera":
+def open_camera(index: int = 0) -> Camera:
+    if is_pi_host():
         return PiCamera()
-    if kind == "opencv":
-        return OpenCVCamera(index)
-    try:
-        return PiCamera()
-    except ImportError:
+    else:
         return OpenCVCamera(index)
