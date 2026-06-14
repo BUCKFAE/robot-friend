@@ -1,7 +1,7 @@
 # All recipes run on your dev machine and talk to the Pi over ssh.
 # `host` is an ssh alias from ~/.ssh/config; point a single call at another
 # Pi with e.g. `PI_HOST=finch-lab just pi::run`.
-host := env("PI_HOST", "finch-home")
+host := env("PI_HOST", "finch-lab")
 remote_dir := "robot-friend"
 mjpeg_port := "8081"
 

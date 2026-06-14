@@ -35,7 +35,7 @@ user, wifi and enable SSH in the Imager's customization dialog. Then add an
 ssh alias for the Pi to `~/.ssh/config` on your dev machine and `ssh-copy-id` your key
 
 ```
-Host finch-home
+Host finch-lab
     HostName <pi-ip>
     User finch
 ```
