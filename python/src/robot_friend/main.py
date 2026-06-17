@@ -4,7 +4,7 @@ from robot_friend.mjpeg import MJPEGServer
 import cv2
 
 from robot_friend.camera import open_camera
-from robot_friend.detection.detection_factory import DetectionFactory
+from robot_friend.image.detection_factory import DetectionFactory
 from robot_friend.utils.get_current_host import is_pi_host
 
 

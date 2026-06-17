@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "numpy>=1.26",
     "opencv-python>=4.13.0.92",
+    "sounddevice>=0.5.5",
 ]
 
 # Laptop-only backend; on the Pi inference runs on the AI HAT via the
@@ -17,8 +18,20 @@ yolo = [
     "ultralytics>=8.4.57",
 ]
 
+# Speech recognition backends (see robot_friend.speech). Both run on the CPU and
+# ship aarch64 wheels, so the same extra works on dev machines and the Pi:
+#  - vosk: Kaldi-based, fast enough for real-time keyword spotting on the Pi
+#    (the default; Whisper is too slow there).
+#  - faster-whisper: Whisper via CTranslate2 (no torch); more accurate, but slow
+#    on the Pi. Kept selectable via TranscriberFactory.
+speech = [
+    "vosk<=0.3.44", # Vosk binaries for latest don't exist for macOS, don't want to build from source
+    "faster-whisper>=1.1.0",
+]
+
 [project.scripts]
 robot-friend = "robot_friend.main:main"
+robot-friend-speech = "robot_friend.speech.speech_testing:main"
 
 [dependency-groups]
 dev = [

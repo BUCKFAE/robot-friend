@@ -4,7 +4,7 @@ import numpy as np
 from ultralytics import YOLO
 
 from robot_friend.image.detection import DetectedObject, DetectedObjectType, BoundingBox
-from robot_friend.image.detector import ImageDetector
+from robot_friend.image.image_detector import ImageDetector
 from robot_friend.resource_handler import get_yolo_model_dir
 
 

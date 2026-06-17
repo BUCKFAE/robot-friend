@@ -1,7 +1,7 @@
 import numpy as np
 
-from robot_friend.detection.backends.hailo.HailoDetector import HailoDetector
-from robot_friend.detection.detection import DetectedObjectType
+from robot_friend.image.backends.hailo.HailoDetector import HailoImageDetector
+from robot_friend.image.detection import DetectedObjectType
 
 
 def _empty_output() -> list[np.ndarray]:
@@ -15,7 +15,7 @@ def test_parse_output_scales_and_filters():
         [0.0, 0.0, 1.0, 1.0, 0.2],  # below confidence threshold
     ], dtype=np.float32)
 
-    detections = HailoDetector.parse_output(output, width=1000, height=500, conf=0.4)
+    detections = HailoImageDetector.parse_output(output, width=1000, height=500, conf=0.4)
 
     assert len(detections) == 1
     d = detections[0]
@@ -29,4 +29,4 @@ def test_parse_output_ignores_other_classes():
     output = _empty_output()
     output[16] = np.array([[0.1, 0.2, 0.5, 0.6, 0.9]], dtype=np.float32)  # dog
 
-    assert HailoDetector.parse_output(output, width=640, height=480, conf=0.4) == []
+    assert HailoImageDetector.parse_output(output, width=640, height=480, conf=0.4) == []

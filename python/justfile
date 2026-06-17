@@ -1,6 +1,6 @@
-# Install / sync Python dependencies (includes the YOLO-on-CPU backend).
+# Install / sync Python dependencies (includes the YOLO-on-CPU and Whisper backends).
 sync:
-  uv sync --dev --extra yolo
+  uv sync --dev --extra yolo --extra speech
 
 # Pi variant: skips torch/ultralytics (inference runs on the AI HAT) and
 # exposes the apt-installed picamera2/Hailo bindings to the venv. The venv
@@ -8,7 +8,7 @@ sync:
 # apt-installed packages even with system-site-packages.
 sync-pi:
   { grep -qs '^home = /usr/bin' .venv/pyvenv.cfg && grep -qsi 'include-system-site-packages = true' .venv/pyvenv.cfg; } || { rm -rf .venv && uv venv --system-site-packages --python /usr/bin/python3; }
-  UV_PYTHON=/usr/bin/python3 uv sync --dev
+  UV_PYTHON=/usr/bin/python3 uv sync --dev --extra speech
 
 # Run the Python test suite.
 test:
@@ -17,6 +17,18 @@ test:
 download-models:
     uv run src/robot_friend/scripts/download_models.py
 
+# Fetch Whisper model(s) into data/models (default: small). e.g. `just python download-whisper medium`
+download-whisper *models:
+    uv run src/robot_friend/scripts/download_whisper.py {{models}}
+
+# Fetch Vosk model(s) into data/models (default: en + de). e.g. `just python download-vosk de`
+download-vosk *langs:
+    uv run src/robot_friend/scripts/download_vosk.py {{langs}}
+
 # Run the robot-friend CLI entrypoint.
 run *args:
   uv run robot-friend {{args}}
+
+# Listen on the microphone, transcribe, and print transcripts + matched keywords.
+listen *args:
+  uv run robot-friend-speech {{args}}
