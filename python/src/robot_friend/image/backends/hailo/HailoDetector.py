@@ -3,15 +3,15 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from robot_friend.detection.detection import BoundingBox, DetectedObject, DetectedObjectType
-from robot_friend.detection.detector import Detector
+from robot_friend.image.detection import BoundingBox, DetectedObject, DetectedObjectType
+from robot_friend.image.image_detector import ImageDetector
 
 # Shipped by the hailo-models apt package (see pi/setup.sh).
 _MODEL_DIR = Path('/usr/share/hailo-models')
 _HEF_MODEL = 'yolov8s_h8.hef'
 
 
-class HailoDetector(Detector):
+class HailoImageDetector(ImageDetector):
     """Pi backend: runs a YOLOv8 HEF on the AI HAT via HailoRT.
 
     Needs the apt packages from pi/setup.sh and a venv created with
