@@ -3,6 +3,7 @@ import time
 from robot_friend.exceptions.missing_hardware_exception import MissingSoundDeviceException
 from robot_friend.speech.audio.sound_device import SoundDevice
 from robot_friend.speech.speech_detector_factory import SpeechDetectorFactory
+from robot_friend.utils.finch_logger import finch_logger
 
 
 def main() -> None:
@@ -15,19 +16,23 @@ def main() -> None:
         sound_device = SoundDevice(threshold=threshold, debug=debug)
     except MissingSoundDeviceException as e:
         # The Pi has no mic yet; fail clearly rather than crashing on PortAudio.
-        print(f'No microphone available: {e}', flush=True)
+        finch_logger.error("No microphone available: %s", e)
         return
 
     speech_detector = SpeechDetectorFactory.get_speech_detector()
 
     with sound_device as mic:
-        print(f'Listening: {speech_detector.get_model_names} (Ctrl-C to stop)', flush=True)
+        finch_logger.info(
+            "Listening: %s (Ctrl-C to stop)", speech_detector.get_model_names
+        )
         try:
             for utterance in mic.listen():
                 started = time.perf_counter()
                 transcript = speech_detector.transcribe(utterance)
                 elapsed = time.perf_counter() - started
-                print(f'transcribe: {elapsed:.2f}s -> {transcript.as_log_line()}')
+                finch_logger.info(
+                    "transcribe: %.2fs -> %s", elapsed, transcript.as_log_line()
+                )
 
         except KeyboardInterrupt:
             pass

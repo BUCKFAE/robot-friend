@@ -1,12 +1,16 @@
 import sys
+import contextlib
 from collections.abc import Iterator
+from threading import Event
 from queue import Queue
+from queue import Empty
 
 import numpy as np
 import sounddevice
 
 from robot_friend.exceptions.missing_hardware_exception import MissingSoundDeviceException
 from robot_friend.speech.audio.vad_segmenter import BLOCK_DURATION, SAMPLE_RATE, VadSegmenter
+from robot_friend.utils.finch_logger import finch_logger
 
 
 def _input_devices() -> list[tuple[int, dict]]:
@@ -19,22 +23,26 @@ def _input_devices() -> list[tuple[int, dict]]:
             if info['max_input_channels'] > 0]
 
 
+def _default_input_device(inputs: list[tuple[int, dict]]) -> int | str:
+    default_index = sounddevice.default.device[0]
+    return default_index if default_index is not None and default_index >= 0 else inputs[0][0]
+
+
 def _prompt_for_device(inputs: list[tuple[int, dict]]) -> int | str:
     """Ask which microphone to use when several are connected.
 
     Falls back to PortAudio's default input device when there's no interactive
     terminal (e.g. running as a service) so capture can still start unattended.
     """
-    default_index = sounddevice.default.device[0]
+    default_index = _default_input_device(inputs)
     if not sys.stdin or not sys.stdin.isatty():
-        chosen = default_index if default_index is not None and default_index >= 0 else inputs[0][0]
-        print(f'Multiple microphones found; using default device {chosen}.', flush=True)
-        return chosen
+        finch_logger.info("Multiple microphones found; using default device %s.", default_index)
+        return default_index
 
-    print('Multiple microphones found:', flush=True)
+    finch_logger.info("Multiple microphones found:")
     for index, info in inputs:
         marker = ' (default)' if index == default_index else ''
-        print(f'  [{index}] {info["name"]}{marker}', flush=True)
+        finch_logger.info("  [%s] %s%s", index, info["name"], marker)
 
     valid = {index for index, _ in inputs}
     while True:
@@ -44,14 +52,14 @@ def _prompt_for_device(inputs: list[tuple[int, dict]]) -> int | str:
         try:
             choice = int(raw)
         except ValueError:
-            print('Please enter a device number.', flush=True)
+            finch_logger.warning("Please enter a device number.")
             continue
         if choice in valid:
             return choice
-        print(f'{choice} is not one of the input devices listed above.', flush=True)
+        finch_logger.warning("%s is not one of the input devices listed above.", choice)
 
 
-def _select_input_device(device: int | str | None) -> int | str:
+def _select_input_device(device: int | str | None, *, interactive: bool = True) -> int | str:
     """Resolve `device` to a microphone, prompting when the choice is ambiguous.
 
     Guarantees the returned device actually captures audio: an explicit `device`
@@ -74,6 +82,10 @@ def _select_input_device(device: int | str | None) -> int | str:
 
     if len(inputs) == 1:
         return inputs[0][0]
+    if not interactive:
+        chosen = _default_input_device(inputs)
+        finch_logger.info("Multiple microphones found; using default device %s.", chosen)
+        return chosen
     return _prompt_for_device(inputs)
 
 
@@ -90,14 +102,24 @@ class SoundDevice:
     e.g. the Pi, which has no mic yet.
     """
 
-    def __init__(self, sample_rate: int = SAMPLE_RATE, block_duration: float = BLOCK_DURATION,
-                 device: int | str | None = None, threshold: float | None = None, debug: bool = False):
-        print('Creating sound device...', flush=True)
-        device = _select_input_device(device)
+    def __init__(
+        self,
+        sample_rate: int = SAMPLE_RATE,
+        block_duration: float = BLOCK_DURATION,
+        device: int | str | None = None,
+        threshold: float | None = None,
+        debug: bool = False,
+        interactive: bool = True,
+    ):
+        finch_logger.info("Creating sound device...")
+        device = _select_input_device(device, interactive=interactive)
 
         if debug:
-            print(f'input devices:\n{sounddevice.query_devices()}', flush=True)
-            print(f'using input device: {sounddevice.query_devices(device, "input")["name"]}', flush=True)
+            finch_logger.debug("input devices:\n%s", sounddevice.query_devices())
+            finch_logger.debug(
+                "using input device: %s",
+                sounddevice.query_devices(device, "input")["name"],
+            )
 
         self.sample_rate = sample_rate
         self._block_duration = block_duration
@@ -118,7 +140,7 @@ class SoundDevice:
 
     def _on_audio(self, indata: np.ndarray, frames: int, time, status) -> None:
         if status:
-            print(f'sound device: {status}', flush=True)
+            finch_logger.warning("sound device: %s", status)
         self._queue.put(indata[:, 0].copy())
 
     def __enter__(self) -> "SoundDevice":
@@ -126,8 +148,13 @@ class SoundDevice:
         return self
 
     def __exit__(self, *exc) -> None:
-        self._stream.stop()
-        self._stream.close()
+        self.close()
+
+    def close(self) -> None:
+        with contextlib.suppress(Exception):
+            self._stream.stop()
+        with contextlib.suppress(Exception):
+            self._stream.close()
 
     def _calibrate(self, seconds: float = 1.0, margin: float = 3.0, floor: float = 0.003) -> None:
         """Set the VAD threshold a few multiples above the measured noise floor.
@@ -136,17 +163,22 @@ class SoundDevice:
         the noise floor and gates `margin`x above it, never below `floor`. This
         is what lets quiet mics work without hand-tuning --threshold.
         """
-        print(f'Calibrating mic noise floor for {seconds:.0f}s (stay quiet)...', flush=True)
+        finch_logger.info(
+            "Calibrating mic noise floor for %.0fs (stay quiet)...", seconds
+        )
         levels = []
         for _ in range(max(1, int(seconds / self._block_duration))):
             block = self._queue.get()
             levels.append(float(np.sqrt(np.mean(np.square(block)))) if block.size else 0.0)
         noise = float(np.median(levels))
         self._segmenter.threshold = max(floor, noise * margin)
-        print(f'Calibrated VAD threshold = {self._segmenter.threshold:.4f} '
-              f'(noise floor {noise:.4f})', flush=True)
+        finch_logger.info(
+            "Calibrated VAD threshold = %.4f (noise floor %.4f)",
+            self._segmenter.threshold,
+            noise,
+        )
 
-    def listen(self) -> Iterator[np.ndarray]:
+    def listen(self, stop_event: Event | None = None) -> Iterator[np.ndarray]:
         """Yield one mono float32 array per spoken utterance, forever."""
         if self._fixed_threshold is None:
             self._calibrate()
@@ -154,28 +186,37 @@ class SoundDevice:
         meter_every = max(1, int(0.5 / self._block_duration))  # ~2 meter lines/sec
         blocks = 0
         was_speaking = False
-        while True:
-            block = self._queue.get()
+        while stop_event is None or not stop_event.is_set():
+            try:
+                block = self._queue.get(timeout=0.1)
+            except Empty:
+                continue
             utterance = seg.push(block)
 
             if self._debug:
                 blocks += 1
                 if seg.is_speaking and not was_speaking:
-                    print('VAD: speech start', flush=True)
+                    finch_logger.debug("VAD: speech start")
                 was_speaking = seg.is_speaking
                 if blocks % meter_every == 0:
-                    print(self._meter(seg.last_rms), flush=True)
+                    finch_logger.debug(self._meter(seg.last_rms))
                 # An utterance closed but was too short to emit — easy to miss otherwise.
                 if utterance is None and not seg.is_speaking and seg.last_utterance_dropped:
-                    print(f'VAD: utterance dropped (peak rms={seg.last_utterance_peak_rms:.4f}, '
-                          'too short — try speaking longer or lower --threshold)', flush=True)
+                    finch_logger.debug(
+                        "VAD: utterance dropped (peak rms=%.4f, too short - "
+                        "try speaking longer or lower --threshold)",
+                        seg.last_utterance_peak_rms,
+                    )
                     seg.last_utterance_dropped = False
 
             if utterance is not None:
                 if self._debug:
                     duration = utterance.size / self.sample_rate
-                    print(f'VAD: utterance emitted ({duration:.2f}s, peak rms='
-                          f'{seg.last_utterance_peak_rms:.4f})', flush=True)
+                    finch_logger.debug(
+                        "VAD: utterance emitted (%.2fs, peak rms=%.4f)",
+                        duration,
+                        seg.last_utterance_peak_rms,
+                    )
                 yield utterance
 
     def _meter(self, rms: float) -> str:

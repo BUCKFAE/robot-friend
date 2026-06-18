@@ -7,17 +7,18 @@ from pathlib import Path
 from robot_friend.resource_handler import get_vosk_model_dir
 from robot_friend.speech.backends.vosk.vosk_model import VoskModel
 from robot_friend.utils.clean_setup_dir import clean_setup_dir
+from robot_friend.utils.finch_logger import finch_logger
 
 
 def download_vosk_models() -> None:
-    print('Downloading vosk models...')
+    finch_logger.info("Downloading vosk models...")
 
     for model in VoskModel:
 
         identifier = model.value.identifier
         url = f'{model.value.base_url}/{identifier}.zip'
         out_dir = get_vosk_model_dir() / identifier
-        print(f'Downloading {identifier}: {url}')
+        finch_logger.info("Downloading %s: %s", identifier, url)
 
         with tempfile.TemporaryDirectory() as tmp:
             tmp_zip = Path(tmp) / f'{identifier}.zip'
@@ -30,7 +31,7 @@ def download_vosk_models() -> None:
             clean_setup_dir(out_dir)
             for item in extracted.iterdir():
                 shutil.move(str(item), str(out_dir / item.name))
-        print(f'  -> {out_dir}')
+        finch_logger.info("  -> %s", out_dir)
 
 
 
