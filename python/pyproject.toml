@@ -5,9 +5,11 @@ description = "Python side of robot-friend"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "colorlog>=6.10.1",
     "numpy>=1.26",
     "opencv-python>=4.13.0.92",
     "sounddevice>=0.5.5",
+    "tqdm>=4.68.2",
 ]
 
 # Laptop-only backend; on the Pi inference runs on the AI HAT via the
@@ -29,13 +31,30 @@ speech = [
     "faster-whisper>=1.1.0",
 ]
 
+# Diagnostics web dashboard (see robot_friend.dashboard). NiceGUI renders the
+# UI in one Python codebase; psutil feeds the system-metrics panel. Pure-Python
+# wheels, so the same extra works on dev machines and the Pi (ARM64).
+diagnostics = [
+    "nicegui>=2.11",
+    "psutil>=5.9",
+]
+
 [project.scripts]
 robot-friend = "robot_friend.main:main"
 robot-friend-speech = "robot_friend.speech.speech_testing:main"
+robot-friend-diagnostics = "robot_friend.dashboard.main:main"
 
 [dependency-groups]
 dev = [
     "pytest>=8",
+]
+# Browser-based visual + E2E suite for the diagnostics dashboard (see
+# FinchObsidian/implementation-plans/diagnostics-testing.md). Kept out of the
+# default `dev` group so plain `uv run pytest` stays browser-free; install with
+# `uv sync --group viz-test` then `uv run playwright install chromium`.
+viz-test = [
+    "pytest-playwright>=0.5",
+    "pytest-base-url>=2.1",
 ]
 
 [build-system]
@@ -47,3 +66,12 @@ packages = ["src/robot_friend"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# tests/ mirrors the src/robot_friend/ package layout (e.g. tests/speech/audio/).
+# importlib mode lets nested test modules share basenames without __init__.py boilerplate.
+# `-m 'not visual'` keeps default runs browser-free; the visual recipes pass an
+# explicit `-m visual` which wins (pytest uses the last -m). The visual conftest
+# also collect-ignores itself when Playwright is absent, so collection stays safe.
+addopts = "--import-mode=importlib -m 'not visual'"
+markers = [
+    "visual: browser-based Playwright visual/E2E tests (deselected by default; run with `-m visual`)",
+]

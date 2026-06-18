@@ -5,6 +5,7 @@ import cv2
 
 from robot_friend.camera import open_camera
 from robot_friend.image.detection_factory import DetectionFactory
+from robot_friend.utils.finch_logger import finch_logger
 from robot_friend.utils.get_current_host import is_pi_host
 
 
@@ -23,10 +24,12 @@ def main() -> None:
     server: MJPEGServer | None = None
     if headless:
         server = MJPEGServer(args.port)
-        print(f'serving annotated view on http://0.0.0.0:{args.port}/', flush=True)
+        finch_logger.info("serving annotated view on http://0.0.0.0:%s/", args.port)
 
     with open_camera() as camera:
-        print(f'Running: {type(detector).__name__} + {type(camera).__name__}', flush=True)
+        finch_logger.info(
+            "Running: %s + %s", type(detector).__name__, type(camera).__name__
+        )
         try:
             while True:
                 frame = camera.read()
