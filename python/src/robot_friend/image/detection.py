@@ -18,6 +18,15 @@ class DetectedObjectType(Enum):
     Enum for everything we can detect
     """
     PERSON = DetectedObjectTypeConfig('person', 0)
+    SPOON = DetectedObjectTypeConfig('spoon', 44)
+    PHONE = DetectedObjectTypeConfig('cell_phone', 69)
+
+    @classmethod
+    def from_coco_class_id(cls, class_id: int) -> 'DetectedObjectType':
+        for object_type in DetectedObjectType:
+            if object_type.value.coco_class_id == class_id:
+                return object_type
+        raise ValueError(f'Did not find object type with coco class {class_id}')
 
 @dataclass
 class DetectedObject:
