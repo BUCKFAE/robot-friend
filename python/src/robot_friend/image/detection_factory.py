@@ -1,4 +1,4 @@
-from robot_friend.image.detector import ImageDetector
+from robot_friend.image.image_detector import ImageDetector
 from robot_friend.utils.get_current_host import is_pi_host
 
 

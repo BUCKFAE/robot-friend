@@ -1,7 +1,6 @@
 from enum import Enum
 
 import numpy as np
-from ultralytics import YOLO
 
 from robot_friend.image.detection import DetectedObject, DetectedObjectType, BoundingBox
 from robot_friend.image.image_detector import ImageDetector
@@ -14,6 +13,11 @@ class YOLOModel(Enum):
 class YoloImageDetector(ImageDetector):
     """Laptop backend. On the Pi this is replaced by IMX500/Hailo."""
     def __init__(self, model: YOLOModel, conf: float = 0.4):
+        # Imported lazily (like camera.py's picamera2) so this module and the YOLOModel
+        # enum stay importable without the `yolo` extra — e.g. on the Pi, where
+        # inference runs on the Hailo HAT, or in a diagnostics-only environment.
+        from ultralytics import YOLO
+
         model_dir = get_yolo_model_dir() / model.value
         assert model_dir.exists(), f'Did not find model at path {model_dir}'
         self.model = YOLO(model_dir)
