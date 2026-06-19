@@ -3,6 +3,7 @@
 host := env("PI_HOST", "finch-lab")
 remote_dir := "robot-friend"
 mjpeg_port := "8081"
+dashboard_port := "8080"
 
 # Not rsynced: the Pi keeps its own .venv, and git history / laptop-only models aren't needed.
 rsync_excludes := " \
@@ -18,6 +19,12 @@ rsync_excludes := " \
 "
 
 repo_root := parent_directory(source_directory())
+
+# Env prelude for any remote `uv` invocation: put the user-local uv on PATH and
+# pin it to the system Python (the Pi venv is built with --system-site-packages
+# off /usr/bin/python3 for the apt Hailo/camera stack). Prepend to an ssh command,
+# e.g. ssh {{host}} '{{pi_env}} cd {{remote_dir}} && uv run ...'.
+pi_env := 'export PATH="$HOME/.local/bin:$PATH" UV_PYTHON=/usr/bin/python3;'
 
 _default:
     just --list
@@ -39,7 +46,7 @@ validate-connection:
 # Sync the repo to the Pi.
 upload: validate-connection
   @echo "Uploading to {{host}}:{{remote_dir}}"
-  rsync -az --delete {{rsync_excludes}} "{{repo_root}}/" "{{host}}:{{remote_dir}}/"
+  rsync -rvP --delete {{rsync_excludes}} "{{repo_root}}/" "{{host}}:{{remote_dir}}/"
 
 # Provision the Pi (Hailo, PCIe Gen 3, uv + just, Python env) — idempotent, reboot once afterwards.
 setup: upload
@@ -50,11 +57,16 @@ setup: upload
 check:
   ssh {{host}} 'lspci | grep -i hailo && ls /dev/hailo0 && hailortcli fw-control identify && rpicam-hello --list-cameras'
 
+# Fetch only the Vosk ASR models: the Pi runs image detection on the Hailo HAT
+# (no YOLO/torch) and Vosk — not Whisper — for real-time ASR.
+download: upload
+  ssh {{host}} '{{pi_env}} cd {{remote_dir}} && uv run --extra audio src/robot_friend/scripts/download_data.py vosk'
+
 # Upload, run person detection on the AI HAT, and open the annotated live view.
 run *args: upload
   #!/usr/bin/env bash
   set -euo pipefail
-  ssh {{host}} 'export HAILO_MONITOR=1 PATH="$HOME/.local/bin:$PATH" UV_PYTHON=/usr/bin/python3; pkill -f "[.]venv/bin/robot-friend" 2>/dev/null; cd {{remote_dir}} && just sync && uv run robot-friend --port {{mjpeg_port}} {{args}}' &
+  ssh {{host}} '{{pi_env}} export HAILO_MONITOR=1; pkill -f "[.]venv/bin/robot-friend" 2>/dev/null; cd {{remote_dir}} && just sync && uv run robot-friend --port {{mjpeg_port}} {{args}}' &
   ssh_pid=$!
   trap 'kill $ssh_pid 2>/dev/null' EXIT
   pi_ip=$(ssh -G {{host}} | awk '/^hostname /{print $2}')
@@ -63,6 +75,22 @@ run *args: upload
     sleep 1
   done
   just connect
+
+# Upload, serve the NiceGUI dashboard web UI on the Pi, and open it in a browser.
+dashboard: upload
+  #!/usr/bin/env bash
+  set -euo pipefail
+  ssh {{host}} '{{pi_env}} export HAILO_MONITOR=1; pkill -f "[.]venv/bin/robot-friend" 2>/dev/null; cd {{remote_dir}} && just sync && uv run robot-friend-dashboard' &
+  ssh_pid=$!
+  trap 'kill $ssh_pid 2>/dev/null' EXIT
+  pi_ip=$(ssh -G {{host}} | awk '/^hostname /{print $2}')
+  until (exec 3<> "/dev/tcp/$pi_ip/{{dashboard_port}}") 2>/dev/null; do
+    kill -0 $ssh_pid 2>/dev/null || { echo "remote dashboard exited before it came up" >&2; exit 1; }
+    sleep 1
+  done
+  open "http://$pi_ip:{{dashboard_port}}/dashboard/"
+  wait $ssh_pid
+
 
 # Watch the raw Pi camera with no robot-friend code: H.264 TCP stream from the Pi, viewed here.
 stream port="8554":

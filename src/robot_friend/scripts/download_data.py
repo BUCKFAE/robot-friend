@@ -3,15 +3,18 @@
 Edit the three lists below to choose which YOLO, Vosk and Whisper models to
 pull, then run this script. It is idempotent: assets already present on disk are
 skipped, so re-running only fetches what is missing.
+
+By default all asset groups are fetched. Pass a subset of ``GROUPS`` as
+positional arguments to fetch only some — e.g. ``download_data.py vosk`` on the
+Pi, which runs Hailo for image detection (no YOLO) and Vosk for ASR.
 """
 
+import argparse
 import shutil
 import tempfile
 import urllib.request
 import zipfile
 from pathlib import Path
-
-from faster_whisper import download_model
 
 from robot_friend.audio.backends.faster_whisper.whisper_audio_detector import WhisperModel
 from robot_friend.audio.backends.vosk.vosk_model import VoskModel
@@ -92,19 +95,40 @@ def _download_whisper(model: WhisperModel) -> None:
     target = get_whisper_model_dir() / f"whisper-{model.value}"
     if _skip_if_present(model.name, target):
         return
+    # Imported lazily so this module stays importable (and vosk-only runs work)
+    # without the `audio` extra's faster-whisper installed.
+    from faster_whisper import download_model
+
     finch_logger.info("Downloading Whisper %s -> %s", model.name, target)
     target.mkdir(parents=True, exist_ok=True)
     download_model(model.value, output_dir=str(target))
 
 
-def main() -> None:
-    for yolo_model in YOLO_MODELS:
-        _download_yolo(yolo_model)
-    for vosk_model in VOSK_MODELS:
-        _download_vosk(vosk_model)
-    for whisper_model in WHISPER_MODELS:
-        _download_whisper(whisper_model)
+# Maps each asset group to the callable that fetches its configured models.
+GROUPS = {
+    "yolo": lambda: [_download_yolo(m) for m in YOLO_MODELS],
+    "vosk": lambda: [_download_vosk(m) for m in VOSK_MODELS],
+    "whisper": lambda: [_download_whisper(m) for m in WHISPER_MODELS],
+}
+
+
+def main(groups: list[str]) -> None:
+    """Fetch the models for each requested asset group.
+
+    Args:
+        groups: Asset-group names to fetch; each must be a key of ``GROUPS``.
+    """
+    for group in groups:
+        GROUPS[group]()
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "groups",
+        nargs="*",
+        choices=list(GROUPS),
+        default=list(GROUPS),
+        help="Asset groups to fetch (default: all).",
+    )
+    main(parser.parse_args().groups)

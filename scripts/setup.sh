@@ -22,10 +22,12 @@ setup_pi() {
   sudo apt full-upgrade -y
 
   # dkms MUST be present before hailo-all, or (since Trixie) the driver never builds.
-  info "Installing apt packages (Hailo stack, camera stack, utils)"
+  info "Installing apt packages (Hailo stack, camera stack, audio, utils)"
   dpkg -s hailo-all > /dev/null 2>&1 || reboot_needed=1
   sudo apt install -y dkms
-  sudo apt install -y git curl hailo-all python3-picamera2 rpicam-apps btop nvtop
+  # libportaudio2: PortAudio runtime that the `sounddevice` wheel dlopens at import
+  # (mic capture / dashboard audio source); the pip wheel ships no bundled library.
+  sudo apt install -y git curl hailo-all python3-picamera2 rpicam-apps libportaudio2 btop nvtop
 
   # Self-heal: if hailo-all installed before dkms, re-running the driver package builds it.
   if ! sudo dkms status 2> /dev/null | grep -qi hailo; then
