@@ -24,8 +24,9 @@ class DetectedObjectTypeConfig:
 class DetectedObjectType(Enum):
     """The object classes we recognize, each mapped to its COCO class id."""
     PERSON = DetectedObjectTypeConfig('person', 0)
-    SPOON = DetectedObjectTypeConfig('spoon', 44)
-    PHONE = DetectedObjectTypeConfig('cell_phone', 69)
+    SPOON = DetectedObjectTypeConfig('spoon', 42)
+    CHAIR = DetectedObjectTypeConfig('chair', 56)
+    PHONE = DetectedObjectTypeConfig('cell_phone', 67)
 
     @classmethod
     def from_coco_class_id(cls, class_id: int) -> 'DetectedObjectType':
