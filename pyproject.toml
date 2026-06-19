@@ -9,6 +9,10 @@ dependencies = [
     "numpy>=1.26",
     "opencv-python>=4.13.0.92",
     "sounddevice>=0.5.5",
+    # Capture-side resampling (like sounddevice, not an ASR backend): some mics only
+    # run at e.g. 32 kHz and reject the 16 kHz our recognizers want, so SoundDevice
+    # captures at the native rate and resamples utterances. aarch64/macOS cp312 wheels.
+    "soxr>=0.5",
     "tqdm>=4.68.2",
 ]
 

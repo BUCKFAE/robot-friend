@@ -7,6 +7,7 @@ from queue import Empty
 
 import numpy as np
 import sounddevice
+import soxr
 
 from robot_friend.exceptions.missing_hardware_exception import MissingSoundDeviceException
 from robot_friend.audio.capture.vad_segmenter import BLOCK_DURATION, SAMPLE_RATE, VadSegmenter
@@ -89,6 +90,64 @@ def _select_input_device(device: int | str | None, *, interactive: bool = True) 
     return _prompt_for_device(inputs)
 
 
+def _select_capture_rate(
+    device: int | str,
+    target_rate: int,
+    *,
+    channels: int = 1,
+    dtype: str = "float32",
+) -> int:
+    """Pick a sample rate the device can actually capture at.
+
+    Prefers `target_rate` so no resampling is needed, then falls back to the
+    device's reported default and the common hardware rates. Many USB mics only
+    run at their native rate (e.g. 32 kHz) and reject 16 kHz outright, which
+    otherwise surfaces as an opaque PortAudio ``-9997`` when the stream opens;
+    probing here lets us resample instead, and fail with a clear message when
+    the device supports none of the candidates.
+
+    Args:
+        device: The resolved input device (index or name).
+        target_rate: The rate we'd prefer to capture at (also the output rate).
+        channels: Capture channel count to validate against.
+        dtype: Sample dtype to validate against.
+
+    Returns:
+        A sample rate that :func:`sounddevice.check_input_settings` accepts.
+
+    Raises:
+        MissingSoundDeviceException: The device supports none of the candidates.
+    """
+    default_rate = int(sounddevice.query_devices(device, "input")["default_samplerate"])
+    # dict.fromkeys dedupes while preserving order: target first (no resample),
+    # then the device default, then usual rates if the default is unopenable.
+    candidates = list(dict.fromkeys([target_rate, default_rate, 48000, 44100, 32000]))
+    for rate in candidates:
+        try:
+            sounddevice.check_input_settings(
+                device=device, samplerate=rate, channels=channels, dtype=dtype
+            )
+            return rate
+        except (ValueError, sounddevice.PortAudioError):
+            continue
+    raise MissingSoundDeviceException(
+        f"Device {device!r} supports none of the sample rates {candidates} "
+        f"({channels}ch {dtype})"
+    )
+
+
+def _resample_to(audio: np.ndarray, src_rate: int, dst_rate: int) -> np.ndarray:
+    """Resample one mono float32 utterance from `src_rate` to `dst_rate`.
+
+    Resamples whole utterances rather than individual blocks so the resampler
+    has no block-boundary discontinuities to smear. A no-op when the rates match
+    (the common case where the device captured at our target rate directly).
+    """
+    if src_rate == dst_rate or audio.size == 0:
+        return audio
+    return soxr.resample(audio, src_rate, dst_rate)
+
+
 class SoundDevice:
     """Microphone capture that yields whole utterances.
 
@@ -98,8 +157,13 @@ class SoundDevice:
             for utterance in mic.listen():
                 ...
 
-    Raises :class:`MissingSoundDeviceException` when there is no input device —
-    e.g. the Pi, which has no mic yet.
+    ``listen()`` always yields mono float32 at ``sample_rate`` (16 kHz for our
+    recognizers); when the device can't capture at that rate we capture at its
+    native rate and resample each utterance, so callers never see the difference.
+
+    Raises :class:`MissingSoundDeviceException` when there is no usable input
+    device — e.g. the Pi before a mic is attached, or one whose hardware supports
+    none of the candidate sample rates.
     """
 
     def __init__(
@@ -121,20 +185,31 @@ class SoundDevice:
                 sounddevice.query_devices(device, "input")["name"],
             )
 
+        # sample_rate is what our recognizers want and what listen() yields. Some
+        # devices can't capture at it, so capture at a supported rate and resample
+        # utterances back to sample_rate before yielding (see _select_capture_rate).
         self.sample_rate = sample_rate
+        self._capture_rate = _select_capture_rate(device, sample_rate)
+        if self._capture_rate != sample_rate:
+            finch_logger.info(
+                "Device %s can't capture at %d Hz; capturing at %d Hz and resampling.",
+                device, sample_rate, self._capture_rate,
+            )
         self._block_duration = block_duration
         self._debug = debug
         # threshold=None -> auto-calibrate from the noise floor on the first listen();
         # a fixed value skips calibration. Mic levels vary wildly between machines,
         # so a hardcoded gate either misses quiet speakers or triggers on noise.
         self._fixed_threshold = threshold
-        self._segmenter = VadSegmenter(sample_rate, block_duration, threshold=threshold or 0.01)
+        # The VAD operates on the raw captured blocks, so it runs at the capture
+        # rate; its gates are in seconds/RMS, so behaviour is rate-independent.
+        self._segmenter = VadSegmenter(self._capture_rate, block_duration, threshold=threshold or 0.01)
         # sounddevice hands the callback float32 blocks of this size; a Queue
         # decouples the realtime audio thread from our transcription loop.
         self._queue: Queue[np.ndarray] = Queue()
         self._stream = sounddevice.InputStream(
-            samplerate=sample_rate, channels=1, dtype='float32',
-            blocksize=int(sample_rate * block_duration), device=device,
+            samplerate=self._capture_rate, channels=1, dtype='float32',
+            blocksize=int(self._capture_rate * block_duration), device=device,
             callback=self._on_audio,
         )
 
@@ -210,6 +285,7 @@ class SoundDevice:
                     seg.last_utterance_dropped = False
 
             if utterance is not None:
+                utterance = _resample_to(utterance, self._capture_rate, self.sample_rate)
                 if self._debug:
                     duration = utterance.size / self.sample_rate
                     finch_logger.debug(
