@@ -1,17 +1,17 @@
-# Diagnostics Web UI — Implementation Plan
+# Dashboard Web UI — Implementation Plan
 
 > Status: **Approved, ready to implement.** Decision date: 2026-06-17.
 > Framework chosen: **NiceGUI** (single Python codebase). This document is the
 > handoff spec — it is intentionally self-contained so implementation can
 > continue after a context compaction.
-> Testing strategy: see [[diagnostics-testing]] — Playwright visual + E2E harness, built
+> Testing strategy: see [[2026-06-18-dashboard-testing]] — Playwright visual + E2E harness, built
 > on a fake-data `--demo` mode, co-developed starting with Phase 1.
 
 ---
 
 ## 1. Goal
 
-A live diagnostics web dashboard for the headless **Raspberry Pi 5 + Hailo-8 AI
+A live web dashboard for the headless **Raspberry Pi 5 + Hailo-8 AI
 HAT** robot ("Finch"), viewed from a dev laptop over the LAN. It must be a set of
 **predefined, reusable components** (VideoPanel, LogPanel, …) arranged in a
 **draggable/resizable grid**, where adding a panel = *instantiate a component +
@@ -107,8 +107,8 @@ Rerun/Grafana remain optional later complements.
 - Generic adapter = `dataclasses.asdict(obj)` rendered as a tree/table, **plus an
   optional per-type custom-renderer registry** (e.g. `Transcript` already has
   `as_log_line()`; respect it). Inventory: `BoundingBox`, `DetectedObjectType(Config)`,
-  `DetectedObject` (image/detection.py); `Transcript`, `Language` (speech/transcript.py);
-  `SpeechKeyword(Config)`, `DetectedSpeechKeyword` (speech/keywords/keyword.py);
+  `DetectedObject` (image/detection.py); `Transcript`, `Language` (audio/transcript.py);
+  `SpeechKeyword(Config)`, `DetectedSpeechKeyword` (audio/keywords/keyword.py);
   `VoskModel(Config)`, `WhisperModel`, `YOLOModel` (backend enums).
 
 ### Video (feature #1) — foundation exists
@@ -123,7 +123,7 @@ Rerun/Grafana remain optional later complements.
 
 ### Module layout (new self-contained package)
 ```
-python/src/robot_friend/diagnostics/
+src/robot_friend/dashboard/
   __init__.py
   bus.py                # Channel fan-out — generalizes MJPEGServer's Condition pattern
   app.py                # builds the NiceGUI page, theme, wires sources -> panels
@@ -229,10 +229,10 @@ def register(type_name: str):
 | FPS / latency / detections | `main.py` loop around `detector.detect(frame)` | wrap with timing → `bus.publish("perf.fps", …)`, `("perf.detect_ms", …)`, `("detections", boxes)`. |
 | Raw + annotated video | `main.py` (replaces single `MJPEGServer.publish`) | publish a copy of the raw frame to `video.raw` before drawing boxes, annotated to `video.annotated`. Generalize `MJPEGServer` → multi-stream. |
 | Mic tap | `sound_device.py:122` (right after `self._queue.put(indata[:, 0].copy())`) | add a **guarded** fan-out (`if self._tap: self._tap.publish(block)`) — zero overhead when no listener; fixes the single-consumer limitation. |
-| Logging | new `diagnostics/sources/logs.py` | `BusLogHandler(logging.Handler)` + `setup_logging()`; optional stdout tee for existing prints. |
+| Logging | new `dashboard/sources/logs.py` | `BusLogHandler(logging.Handler)` + `setup_logging()`; optional stdout tee for existing prints. |
 
-> Keep existing behavior intact when diagnostics is off (guards / opt-in). The
-> diagnostics server starts alongside the existing loop, host-aware like everything else.
+> Keep existing behavior intact when the dashboard is off (guards / opt-in). The
+> dashboard server starts alongside the existing loop, host-aware like everything else.
 
 ---
 
@@ -265,14 +265,14 @@ Avoid `ui.pyplot`/matplotlib on the Pi (set `MATPLOTLIB=false`).
 - **`pyproject.toml`** — new optional extra, added per-phase:
   ```toml
   [project.optional-dependencies]
-  diagnostics = ["nicegui", "psutil"]   # + "scipy" (Phase 5 audio), "pyserial" (future serial)
+  dashboard = ["nicegui", "psutil"]   # + "scipy" (Phase 5 audio), "pyserial" (future serial)
   ```
-- **Entrypoint:** `robot-friend-diagnostics = "robot_friend.dashboard.main:main"`.
-- **justfile (`python/`):** `diagnostics *args: uv run robot-friend-diagnostics {{args}}`.
-- **justfile (`pi/`):** a `diagnostics` recipe mirroring `run` — upload, start the
+- **Entrypoint:** `robot-friend-dashboard = "robot_friend.dashboard.main:main"`.
+- **justfile (root):** `just dashboard` runs `uv run robot-friend-dashboard {{args}}`.
+- **justfile (`pi/`):** a dashboard recipe mirroring `run` — upload, start the
   server on a port, open the laptop browser at `http://<pi-ip>:<port>/`.
 - **Pi notes:** ARM64 only; env `MATPLOTLIB=false`; use `ui.echart` (not pyplot);
-  avoid SCSS (use `ui.add_css`); install into the `sync-pi` system-site-packages venv.
+  avoid SCSS (use `ui.add_css`); install into the `just setup` system-site-packages venv.
   Precedent: Zauberzeug's RoSys robotics framework runs on NiceGUI on edge hardware.
 
 ---

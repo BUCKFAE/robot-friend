@@ -1,7 +1,7 @@
-# Diagnostics UI — Visual & E2E Test Harness Plan
+# Dashboard UI — Visual & E2E Test Harness Plan
 
 > Status: **Approved, ready to implement.** Decision date: 2026-06-17.
-> Companion to [[diagnostics-dashboard]] — that doc is *what* we build; this is *how
+> Companion to [[2026-06-18-dashboard]] — that doc is *what* we build; this is *how
 > we validate it renders correctly*. Self-contained so it survives a context compaction.
 
 ---
@@ -36,15 +36,15 @@ concrete requirements (from the user):
 ## 3. Keystone: a fake-data "demo mode" in the app itself
 
 The harness is **not** a bolt-on. Fake data is a first-class mode of the dashboard:
-each `DataSource` (see [[diagnostics-dashboard]] §4) gets a **fake sibling** that pushes
-deterministic dummy data into the `Bus`; `diagnostics.main` wires fakes in when
-`DIAGNOSTICS_FAKE=<scenario>` is set (CLI: `--demo[=scenario]`).
+each `DataSource` (see [[2026-06-18-dashboard]] §4) gets a **fake sibling** that pushes
+deterministic dummy data into the `Bus`; `dashboard.main` wires fakes in when
+`DASHBOARD_FAKE=<scenario>` is set (CLI: `--demo[=scenario]`).
 
 Why this is the center of gravity:
 - **No hardware** — renders the full dashboard on a laptop or CI. Video panel points at
   one **fixed JPEG** (not a live stream); metrics replay a canned series; logs emit
   scripted lines; dataclass panel shows sample `DetectedObject`/`Transcript` instances.
-- **Doubles as a dev tool** — `just python diagnostics --demo` to preview/iterate on the
+- **Doubles as a dev tool** — `just dashboard --demo` to preview/iterate on the
   UI anytime, no robot needed. Big DX win.
 - **It IS the extensibility payoff** (the project's #1 priority): *a new panel isn't
   "done" until it ships a fake source + sample data.* Add those and the panel
@@ -52,7 +52,7 @@ Why this is the center of gravity:
   Test coverage scales with the component registry for free.
 
 ### Scenarios (the "dummy data you feed it")
-Named datasets chosen to stress layout. Selected via `DIAGNOSTICS_FAKE=<name>`:
+Named datasets chosen to stress layout. Selected via `DASHBOARD_FAKE=<name>`:
 
 | Scenario | Stresses |
 |---|---|
@@ -78,9 +78,9 @@ confirm the MJPEG `<img>` painted (`naturalWidth > 0`). Objective, fast, CI-frie
 
 **Tier 2 — Screenshot gallery** (`test_gallery.py`). *Requirement #1.* Render the
 **scenario × viewport** matrix and write full-page PNGs to
-`python/tests/visual/gallery/<scenario>__<viewport>.png`. Claude reviews them by opening
+`tests/dashboard/visual/gallery/<scenario>__<viewport>.png`. Claude reviews them by opening
 the PNGs directly (the Read tool renders images) and reporting overlaps/clipping/contrast
-issues. `just python gallery` regenerates the whole set.
+issues. `just gallery` regenerates the whole set.
 
 ## 5. Programmatic overlap/overflow detection (the important bit)
 
@@ -112,16 +112,16 @@ Flagged by research; all handled in the harness/app:
 
 ## 7. Layout, deps, tooling, CI
 
-**Convention (in place since 2026-06-17):** `python/tests/` mirrors the
-`src/robot_friend/` package tree (e.g. `tests/speech/audio/test_vad_segmenter.py`).
+**Convention (in place since 2026-06-17):** `tests/` mirrors the
+`src/robot_friend/` package tree (e.g. `tests/audio/capture/test_vad_segmenter.py`).
 pytest runs in `--import-mode=importlib` (set in `pyproject.toml`), so nested test
-modules need no `__init__.py` and may share basenames. Diagnostics tests follow suit.
+modules need no `__init__.py` and may share basenames. Dashboard tests follow suit.
 
 ```
-python/tests/                      # mirrors src/robot_friend/ (importlib mode, no __init__.py)
-  image/ · speech/ · …             # existing unit tests, one folder per src package
-  diagnostics/                     # mirrors src/robot_friend/diagnostics/
-    test_bus.py                    # browser-free unit tests for diagnostics modules
+tests/                             # mirrors src/robot_friend/ (importlib mode, no __init__.py)
+  image/ · audio/ · …              # existing unit tests, one folder per src package
+  dashboard/                       # mirrors src/robot_friend/dashboard/
+    test_bus.py                    # browser-free unit tests for dashboard modules
     visual/                        # Playwright visual + E2E suite for the assembled app
       conftest.py        # live_server (subprocess + readiness), sized_page (viewports), helpers
       fakes.py           # Fake*Source classes + SCENARIOS   (GROWS as panels are added)
@@ -135,14 +135,14 @@ python/tests/                      # mirrors src/robot_friend/ (importlib mode, 
   viz-test = ["pytest-playwright", "pytest-base-url"]   # + pytest-playwright-visual-snapshot LATER
   ```
   Fake-data/demo mode itself needs **no** new runtime deps.
-- **`just` (python/):**
-  `diagnostics *args: uv run robot-friend-diagnostics {{args}}` (use `--demo` for fakes),
-  `gallery: uv run pytest tests/diagnostics/visual/test_gallery.py -m visual`,
+- **`just` (root):**
+  `dashboard *args: uv run robot-friend-dashboard {{args}}` (use `--demo` for fakes),
+  `gallery: uv run pytest tests/dashboard/visual/test_gallery.py -m visual`,
   `test-visual: uv run playwright install chromium && uv run pytest -m visual`.
 - **Marker + default isolation:** register a `visual` marker; default `uv run pytest`
-  stays browser-free via `--ignore=tests/diagnostics/visual` (import-safe even when
+  stays browser-free via `--ignore=tests/dashboard/visual` (import-safe even when
   Playwright/browser absent). Existing unit tests (now mirrored under their src paths,
-  e.g. `tests/speech/audio/`) keep running by default.
+  e.g. `tests/audio/capture/`) keep running by default.
 - **CI:** keep the current `python` job browser-free (it already runs `uv run pytest`).
   Add a **separate `e2e` job**: `uv sync --group viz-test` → `uv run playwright install
   --with-deps chromium` → `uv run pytest -m visual`, uploading `gallery/` + traces as
@@ -151,12 +151,12 @@ python/tests/                      # mirrors src/robot_friend/ (importlib mode, 
 
 ## 8. Sequencing — co-develop with the dashboard
 
-The harness can't precede the app it tests. So, folding into [[diagnostics-dashboard]] §8
+The harness can't precede the app it tests. So, folding into [[2026-06-18-dashboard]] §8
 build phases:
 - **Phase 1 (skeleton + video)** also delivers the **harness shell**: `conftest.py`
   (`live_server`, `sized_page`), the `--demo` mode + first `FakeVideoSource`, the
   `dashboard-ready` sentinel, `test_render.py` (overlap/console-error sweep) and
-  `test_gallery.py`. ✔ Verify: `just python gallery` produces FHD/ultrawide/laptop/tablet
+  `test_gallery.py`. ✔ Verify: `just gallery` produces FHD/ultrawide/laptop/tablet
   PNGs of the two video tiles; Claude opens them; Tier-1 passes.
 - **Every later phase** (logs, metrics, dataclasses/tables, audio) adds its `Fake*Source`
   + a `stress_text` contribution. Rule: **a panel isn't done until it has a fake source +
@@ -185,7 +185,7 @@ def _wait_ready(url, timeout=30):
 def live_server():
     proc = subprocess.Popen(
         [sys.executable, "-m", "robot_friend.dashboard.main", "--demo"],
-        env={"DIAGNOSTICS_HOST": HOST, "DIAGNOSTICS_PORT": str(PORT), "DIAGNOSTICS_FAKE": "nominal"},
+        env={"DASHBOARD_HOST": HOST, "DASHBOARD_PORT": str(PORT), "DASHBOARD_FAKE": "nominal"},
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     url = f"http://{HOST}:{PORT}"
     try: _wait_ready(url); yield url
