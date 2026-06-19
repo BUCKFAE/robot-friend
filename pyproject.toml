@@ -1,0 +1,70 @@
+[project]
+name = "robot-friend"
+version = "0.1.0"
+description = "Python side of robot-friend"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "colorlog>=6.10.1",
+    "numpy>=1.26",
+    "opencv-python>=4.13.0.92",
+    "sounddevice>=0.5.5",
+    "tqdm>=4.68.2",
+]
+
+# Laptop-only backend; on the Pi inference runs on the AI HAT via the
+# apt-installed Hailo stack instead (see scripts/setup.sh).
+[project.optional-dependencies]
+yolo = [
+    "torch>=2.12.0",
+    "ultralytics>=8.4.57",
+]
+
+# ASR backends (see robot_friend.audio). CPU-only, aarch64 wheels — same extra on dev + Pi.
+#  - vosk: Kaldi; fast enough for real-time keyword spotting on the Pi (the default).
+#  - faster-whisper: more accurate, but too slow on the Pi.
+audio = [
+    "vosk<=0.3.44", # newer Vosk has no macOS binaries and we don't want to build from source
+    "faster-whisper>=1.1.0",
+]
+
+# Dashboard web UI (robot_friend.dashboard): NiceGUI + psutil. Pure-Python wheels — same extra on dev + Pi.
+dashboard = [
+    "nicegui>=2.11",
+    "psutil>=5.9",
+]
+
+[project.scripts]
+robot-friend = "robot_friend.main:main"
+robot-friend-audio = "robot_friend.audio.audio_testing:main"
+robot-friend-dashboard = "robot_friend.dashboard.main:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
+# Browser-based visual + E2E suite (see FinchObsidian/implementation-plans/2026-06-18-dashboard-testing.md).
+# Separate from `dev` so plain `uv run pytest` stays browser-free.
+viz-test = [
+    "pytest-playwright>=0.5",
+    "pytest-base-url>=2.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/robot_friend"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# tests/ mirrors the src/robot_friend/ package layout (e.g. tests/speech/audio/).
+# importlib mode lets nested test modules share basenames without __init__.py boilerplate.
+# `-m 'not visual'` keeps default runs browser-free; the visual recipes pass an
+# explicit `-m visual` which wins (pytest uses the last -m). The visual conftest
+# also collect-ignores itself when Playwright is absent, so collection stays safe.
+addopts = "--import-mode=importlib -m 'not visual'"
+markers = [
+    "visual: browser-based Playwright visual/E2E tests (deselected by default; run with `-m visual`)",
+]
