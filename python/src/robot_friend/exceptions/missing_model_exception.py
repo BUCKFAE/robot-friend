@@ -1,4 +1,0 @@
-
-
-class MissingModelException(Exception):
-    pass
