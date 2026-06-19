@@ -1,38 +1,72 @@
 # Robot Friend
 
-The repo is split into three top-level modules:
+A companion robot ("Finch"): a Raspberry Pi 5 + Hailo-8 AI HAT handles vision
+(person/object detection) and speech (keyword spotting), an Arduino drives the
+hardware, and a web dashboard shows what the robot sees and hears.
+
+The repo has three areas:
 
 - `arduino/` — PlatformIO firmware (sketch, libs, tests, clangd setup).
-- `python/` — host-side Python package, managed with `uv`.
-- `pi/` — Raspberry Pi provisioning (setup script, systemd service).
+- `pi/` — Raspberry Pi provisioning + the ssh workflow recipes.
+- the repo root — the Python package (`src/robot_friend/`), managed with `uv`.
+  `pyproject.toml`, the venv (`.venv/`), `tests/` and `data/` live at the root so
+  editors and uv auto-detect the environment.
 
-The top-level `justfile` exposes them as [just modules](https://just.systems/man/en/modules.html).
+The top-level `justfile` holds the Python recipes directly and exposes `arduino`
+and `pi` as [just modules](https://just.systems/man/en/modules.html).
 
 ## Getting Started
 
-Prerequisites: [PlatformIO Core](https://docs.platformio.org/page/core/installation/index.html),
-[uv](https://docs.astral.sh/uv/), [just](https://github.com/casey/just), Python 3.12+.
+Prerequisites: [uv](https://docs.astral.sh/uv/), [just](https://github.com/casey/just),
+[PlatformIO Core](https://docs.platformio.org/page/core/installation/index.html), Python 3.12+.
 
 ```sh
-just                       # list all recipes
-just arduino test          # run host tests for the firmware
-just arduino test-uno      # run tests on a connected Uno
-just arduino build         # compile firmware for the Uno
-just arduino upload        # flash the Uno + open serial monitor
-
-just python sync           # install / sync Python deps
-just python test           # run the Python test suite
-just python run            # invoke the robot-friend CLI
+just                 # list all recipes
+just setup           # provision THIS machine (auto-detects Raspberry Pi vs dev machine)
+just test            # all tests in order: firmware host tests, then Python unit tests
+just run             # person detection (serves the annotated camera view; see --help)
+just listen          # microphone → transcript + matched keywords
+just dashboard       # the dashboard web UI (--demo-scenario nominal = fake data, no hardware)
+just download        # fetch model assets (edit the lists at the top of download_data.py)
 ```
 
-Each subdirectory has its own `justfile` — you can also `cd arduino && just test`.
+`just setup` is the one-stop provisioner and figures out where it's running: on a
+dev machine it syncs every dependency extra plus the browser-based visual-test deps
+(Playwright + Chromium); on a Raspberry Pi it installs the Hailo/camera stack and
+builds the system-site-packages venv. `just sync` is the fast dependency re-sync
+(also auto-detecting) — run it after pulling code. No `--dev`/`--pi` flags: the host
+is detected for you.
 
-## Raspberry Pi setup
+The detection backend and camera are auto-selected from the host: Hailo + Pi camera
+on the Pi (headless — serves the annotated view as MJPEG), YOLO-on-CPU + webcam on a
+laptop (opens a local preview window instead).
+
+### Tests
+
+`just test` runs the Arduino host tests, then the Python unit suite, in order. The
+dashboard's browser-based visual/E2E suite is kept separate (it needs Playwright +
+Chromium, installed by `just setup`):
+
+```sh
+just test-visual     # the full visual + E2E suite
+just gallery         # regenerate the dashboard screenshot gallery for review
+```
+
+### Arduino
+
+```sh
+just arduino::test        # host (native) tests
+just arduino::test-uno    # tests on a connected Uno
+just arduino::build       # compile firmware for the Uno
+just arduino::upload      # flash the Uno + open the serial monitor
+```
+
+## Raspberry Pi
 
 Flash Raspberry Pi OS (64-bit, Bookworm or newer) with the
-[Raspberry Pi Imager](https://www.raspberrypi.com/software/) — set hostname,
-user, wifi and enable SSH in the Imager's customization dialog. Then add an
-ssh alias for the Pi to `~/.ssh/config` on your dev machine and `ssh-copy-id` your key
+[Raspberry Pi Imager](https://www.raspberrypi.com/software/) — set hostname, user,
+wifi and enable SSH in the customization dialog. Add an ssh alias for the Pi to
+`~/.ssh/config` on your dev machine and `ssh-copy-id` your key:
 
 ```
 Host finch-lab
@@ -40,32 +74,32 @@ Host finch-lab
     User finch
 ```
 
-### Camera over ssh
-
-The Pi runs headless and serves video over the network; the live view (ffplay)
-opens on your dev machine:
+Then, from your dev machine (everything runs over ssh; the live view opens locally):
 
 ```sh
-just pi::run                # detect on the AI HAT, serve the annotated MJPEG view + open it
-just pi::connect            # view the MJPEG stream served by a running `just pi::run`
-just pi::stream             # raw camera, H.264 over TCP, no robot-friend code + open it
+just pi::setup       # upload + provision the Pi (idempotent; reboot once afterwards)
+just pi::check       # verify the AI HAT + camera are detected (after reboot)
+just pi::run         # detect on the AI HAT, serve the annotated MJPEG view + open it
+just pi::connect     # open the MJPEG view served by a running `just pi::run`
+just pi::stream      # raw camera over H.264/TCP, no robot-friend code + open it
 ```
+
+Point a one-off call at another Pi with `PI_HOST=other-host just pi::run`.
 
 ### Arduino layout
 
-- `arduino/src/main.cpp` — Arduino sketch.
+- `arduino/src/main.cpp` — the sketch.
 - `arduino/lib/<Name>/` — testable libraries; built for both host and Uno.
 - `arduino/test/test_<name>/` — unit tests, auto-discovered by PlatformIO.
 
-`arduino/compile_commands.json` (clangd's project database) is regenerated
-automatically by every `just arduino` recipe.
+`arduino/compile_commands.json` (clangd's database) is regenerated by every
+`just arduino` recipe.
 
-### Using Obsidian
+### Obsidian & VSCode
 
-Install [Obsidian](https://obsidian.md/) and open the `FinchObsidian/` folder as a vault for the project notes.
-
-### Using VSCode
-
-Install the [PlatformIO IDE](https://marketplace.visualstudio.com/items?itemName=platformio.platformio-ide)
-extension and open the `arduino/` folder. The `just` recipes and
-`scripts/gen_compile_commands.py` are not needed.
+- Open `FinchObsidian/` as an [Obsidian](https://obsidian.md/) vault for the project
+  notes and `implementation-plans/`.
+- VSCode: open the **repo root** — uv's `.venv/` at the root is detected automatically
+  (the reason the Python project lives at the root). For firmware, open `arduino/` with
+  the [PlatformIO IDE](https://marketplace.visualstudio.com/items?itemName=platformio.platformio-ide)
+  extension.

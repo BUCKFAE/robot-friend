@@ -43,9 +43,6 @@ jobs:
 
   python:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: python
     steps:
       - uses: actions/checkout@v4
 
@@ -58,7 +55,30 @@ jobs:
         run: uv python install 3.12
 
       - name: Sync dependencies
-        run: uv sync --dev --extra yolo
+        run: uv sync --all-extras --dev
 
       - name: Run tests
-        run: uv run pytest
+        run: uv run --all-extras pytest
+
+  # Browser-based dashboard visual/E2E suite, kept separate from the fast unit job.
+  visual:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Sync dependencies (dashboard + visual suite)
+        run: uv sync --extra dashboard --group viz-test
+
+      - name: Install Chromium
+        run: uv run --group viz-test playwright install --with-deps chromium
+
+      - name: Run visual + E2E suite
+        run: uv run --extra dashboard --group viz-test pytest -m visual
