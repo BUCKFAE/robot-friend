@@ -6,3 +6,6 @@
 - *Board type*: 
     - Arduino Duemilanove or
     - Nano w/Atmega328
+
+---
+- PI-Hat needs 13W

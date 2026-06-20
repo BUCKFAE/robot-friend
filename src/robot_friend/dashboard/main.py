@@ -6,6 +6,7 @@ from nicegui import app, ui
 from robot_friend.dashboard import app as dashboard_app
 from robot_friend.dashboard.app import bus, logs, streams
 from robot_friend.dashboard.controls_client import RobotControlsClient
+from robot_friend.dashboard.servos_client import RobotServosClient
 from robot_friend.dashboard.dashboard_scenario import DashboardDemoScenario
 from robot_friend.dashboard.sources.data_source import DashboardDataSource
 from robot_friend.dashboard.sources.dataclass import FakeDataclassSource
@@ -58,6 +59,8 @@ def main() -> None:
     if dashboard_scenario is None:
         # Live: drive the ControlPanel against the robot (enumerate + command its devices).
         dashboard_app.controls = RobotControlsClient(args.robot_url)
+        # Live: drive the ServoPanel against the robot (read + command its servos).
+        dashboard_app.servos = RobotServosClient(args.robot_url)
     sources = _build_sources(dashboard_scenario, args.robot_url)
 
     @app.on_startup

@@ -12,6 +12,7 @@ from robot_friend.exceptions.missing_hardware_exception import (
 )
 from robot_friend.image.image_detector_factory import ImageDetectorFactory
 from robot_friend.robot_server import RobotServer
+from robot_friend.servo.servo_controller import ServoController
 from robot_friend.telemetry.store import TelemetryStore
 from robot_friend.utils.finch_logger import finch_logger
 from robot_friend.utils.get_current_host import is_pi_host
@@ -155,6 +156,9 @@ def main() -> None:
     detector = ImageDetectorFactory.get_image_detector()
     store = TelemetryStore()
     controls = RobotControls()
+    # Best-effort: the factory always returns a working driver (the in-memory fake when no
+    # PCA9685 is wired), so this never blocks startup whether or not servos are attached.
+    servos = ServoController.from_factory()
 
     # Capture the robot's own logging so the dashboard can show it (the robot serves it;
     # it doesn't push). Harmless when nobody attaches — just a bounded ring buffer.
@@ -174,8 +178,13 @@ def main() -> None:
         "/devices.json", lambda _query: json.dumps(controls.devices_payload()).encode()
     )
     server.on_post("/control", lambda body: controls.apply(body))
+    server.on_get(
+        "/servos.json", lambda _query: json.dumps(servos.snapshot()).encode()
+    )
+    server.on_post("/servo", lambda body: servos.apply(body))
     finch_logger.info(
-        "serving on http://0.0.0.0:%s/ (video, telemetry, logs, devices, POST /control)",
+        "serving on http://0.0.0.0:%s/ "
+        "(video, telemetry, logs, devices, servos, POST /control, POST /servo)",
         args.port,
     )
 
