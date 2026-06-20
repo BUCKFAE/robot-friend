@@ -8,6 +8,7 @@ dependencies = [
     "colorlog>=6.10.1",
     "numpy>=1.26",
     "opencv-python>=4.13.0.92",
+    "smbus3>=0.5.5",
     "sounddevice>=0.5.5",
     # Capture-side resampling (like sounddevice, not an ASR backend): some mics only
     # run at e.g. 32 kHz and reject the 16 kHz our recognizers want, so SoundDevice

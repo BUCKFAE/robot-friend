@@ -27,7 +27,7 @@ setup_pi() {
   sudo apt install -y dkms
   # libportaudio2: PortAudio runtime that the `sounddevice` wheel dlopens at import
   # (mic capture / dashboard audio source); the pip wheel ships no bundled library.
-  sudo apt install -y git curl hailo-all python3-picamera2 rpicam-apps libportaudio2 btop nvtop tmux vim neovim
+  sudo apt install -y git curl hailo-all python3-picamera2 rpicam-apps libportaudio2 i2c-tools btop nvtop tmux vim neovim
 
   # Self-heal: if hailo-all installed before dkms, re-running the driver package builds it.
   if ! sudo dkms status 2> /dev/null | grep -qi hailo; then
@@ -41,6 +41,15 @@ setup_pi() {
     echo 'dtparam=pciex1_gen=3' | sudo tee -a "$boot_config" > /dev/null
     reboot_needed=1
   fi
+
+  info "Enabling I2C"
+    if ! grep -q '^dtparam=i2c_arm=on' "$boot_config"; then
+      echo 'dtparam=i2c_arm=on' | sudo tee -a "$boot_config" > /dev/null
+      reboot_needed=1
+    fi
+    # i2c-dev exposes the /dev/i2c-* char devices that userspace (smbus, i2cdetect) needs.
+    grep -qx 'i2c-dev' /etc/modules || echo 'i2c-dev' | sudo tee -a /etc/modules > /dev/null
+    lsmod | grep -q '^i2c_dev' || sudo modprobe i2c-dev
 
   info "Installing uv and just"
   export PATH="$HOME/.local/bin:$PATH"

@@ -2399,6 +2399,7 @@ dependencies = [
     { name = "colorlog" },
     { name = "numpy" },
     { name = "opencv-python" },
+    { name = "smbus3" },
     { name = "sounddevice" },
     { name = "soxr" },
     { name = "tqdm" },
@@ -2435,6 +2436,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26" },
     { name = "opencv-python", specifier = ">=4.13.0.92" },
     { name = "psutil", marker = "extra == 'dashboard'", specifier = ">=5.9" },
+    { name = "smbus3", specifier = ">=0.5.5" },
     { name = "sounddevice", specifier = ">=0.5.5" },
     { name = "soxr", specifier = ">=0.5" },
     { name = "torch", marker = "extra == 'yolo'", specifier = ">=2.12.0" },
@@ -2549,6 +2551,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
+]
+
+[[package]]
+name = "smbus3"
+version = "0.5.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/75/39/4b7fe2b7cfb42a39e5bb4ef2970a3befc0febbf2b5b8ef85fac04ca6dcb3/smbus3-0.5.5.tar.gz", hash = "sha256:91eed38fb6b7d2f893fbfc3f37006aa41e6913fdda5b3a9a79238b353760f92e", size = 22100, upload-time = "2024-06-29T01:55:18.214Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f5/cf/a0cfae35dac3e3d0b1b4242c8ba184616a47550f8c727b0df654d4338e2d/smbus3-0.5.5-py3-none-any.whl", hash = "sha256:7f4cc169975543e67e4b7404168ce918e656f6f8daca5de2bd30527298058083", size = 13616, upload-time = "2024-06-29T01:55:16.434Z" },
 ]
 
 [[package]]
