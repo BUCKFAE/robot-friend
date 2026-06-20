@@ -27,7 +27,7 @@ setup_pi() {
   sudo apt install -y dkms
   # libportaudio2: PortAudio runtime that the `sounddevice` wheel dlopens at import
   # (mic capture / dashboard audio source); the pip wheel ships no bundled library.
-  sudo apt install -y git curl hailo-all python3-picamera2 rpicam-apps libportaudio2 btop nvtop
+  sudo apt install -y git curl hailo-all python3-picamera2 rpicam-apps libportaudio2 btop nvtop tmux vim neovim
 
   # Self-heal: if hailo-all installed before dkms, re-running the driver package builds it.
   if ! sudo dkms status 2> /dev/null | grep -qi hailo; then
