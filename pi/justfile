@@ -62,34 +62,42 @@ check:
 download: upload
   ssh {{host}} '{{pi_env}} cd {{remote_dir}} && uv run --extra audio src/robot_friend/scripts/download_data.py vosk'
 
-# Upload, run person detection on the AI HAT, and open the annotated live view.
-run *args: upload
-  #!/usr/bin/env bash
-  set -euo pipefail
-  ssh {{host}} '{{pi_env}} export HAILO_MONITOR=1; pkill -f "[.]venv/bin/robot-friend" 2>/dev/null; cd {{remote_dir}} && just sync && uv run robot-friend --port {{mjpeg_port}} {{args}}' &
-  ssh_pid=$!
-  trap 'kill $ssh_pid 2>/dev/null' EXIT
-  pi_ip=$(ssh -G {{host}} | awk '/^hostname /{print $2}')
-  until (exec 3<> "/dev/tcp/$pi_ip/{{mjpeg_port}}") 2>/dev/null; do
-    kill -0 $ssh_pid 2>/dev/null || { echo "remote run exited before the stream came up" >&2; exit 1; }
-    sleep 1
-  done
-  just connect
+# Stop any robot-friend OR dashboard process on the Pi and wait for the camera/Hailo
+# to be released. One pattern matches both entrypoints on purpose — the hardware is
+# exclusive, so only one can run at a time.
+_kill-remote:
+  ssh {{host}} 'pkill -f "[.]venv/bin/robot-friend" 2>/dev/null; for _ in $(seq 1 40); do pgrep -f "[.]venv/bin/robot-friend" >/dev/null 2>&1 || break; sleep 0.25; done; true'
 
-# Upload, serve the NiceGUI dashboard web UI on the Pi, and open it in a browser.
-dashboard: upload
+# Stop the detached robot-friend (or dashboard) currently running on the Pi.
+stop: _kill-remote
+  @echo "stopped robot-friend on {{host}}"
+
+# Upload + start person detection on the Pi, DETACHED so it outlives Ctrl-C (re-run restarts it).
+run *args: upload _kill-remote
   #!/usr/bin/env bash
   set -euo pipefail
-  ssh {{host}} '{{pi_env}} export HAILO_MONITOR=1; pkill -f "[.]venv/bin/robot-friend" 2>/dev/null; cd {{remote_dir}} && just sync && uv run robot-friend-dashboard' &
-  ssh_pid=$!
-  trap 'kill $ssh_pid 2>/dev/null' EXIT
+  # `just sync` runs in the foreground (ssh waits for it); only `uv run` is detached
+  # into its own session with its std fds redirected, so ssh returns and the Pi keeps it.
+  ssh {{host}} '{{pi_env}} export HAILO_MONITOR=1; cd {{remote_dir}} && just sync && { setsid nohup uv run robot-friend {{args}} >robot-friend.log 2>&1 </dev/null & }'
+  echo "robot-friend started on {{host}} (detached). Tailing logs; Ctrl-C leaves it running. Stop with: just pi::stop  ·  Live view: just pi::connect"
+  # -t so Ctrl-C is forwarded to the remote `tail` (not left as an orphan); || true keeps
+  # that expected 130 from failing the recipe. The detached robot is unaffected either way.
+  ssh -t {{host}} 'cd {{remote_dir}} && tail -n +1 -F robot-friend.log' || true
+
+# Upload + serve the NiceGUI dashboard on the Pi and open it locally; Ctrl-C stops it.
+dashboard: upload _kill-remote
+  #!/usr/bin/env bash
+  set -euo pipefail
   pi_ip=$(ssh -G {{host}} | awk '/^hostname /{print $2}')
-  until (exec 3<> "/dev/tcp/$pi_ip/{{dashboard_port}}") 2>/dev/null; do
-    kill -0 $ssh_pid 2>/dev/null || { echo "remote dashboard exited before it came up" >&2; exit 1; }
-    sleep 1
-  done
-  open "http://$pi_ip:{{dashboard_port}}/dashboard/"
-  wait $ssh_pid
+  # Open the browser once the dashboard port is up; this waiter is cleaned up on exit.
+  ( until (exec 3<> "/dev/tcp/$pi_ip/{{dashboard_port}}") 2>/dev/null; do sleep 1; done; open "http://$pi_ip:{{dashboard_port}}/" ) &
+  waiter=$!
+  trap 'kill "$waiter" 2>/dev/null || true' EXIT
+  rc=0
+  ssh -t {{host}} '{{pi_env}} export HAILO_MONITOR=1; cd {{remote_dir}} && just sync && exec uv run robot-friend-dashboard' || rc=$?
+  # 130 == Ctrl-C forwarded to the remote dashboard, i.e. the expected way to stop it.
+  if [ "$rc" -eq 130 ]; then rc=0; fi
+  exit "$rc"
 
 
 # Watch the raw Pi camera with no robot-friend code: H.264 TCP stream from the Pi, viewed here.
