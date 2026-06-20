@@ -1,7 +1,18 @@
 import pytest
 
 from robot_friend.image.detection import BoundingBox
-from robot_friend.utils.coordinates.conversion import bounding_box_to_coordinate
+from robot_friend.utils.coordinates.conversion import (
+    bounding_box_to_coordinate,
+    bounding_box_to_coordinate_in,
+)
+
+
+class _FakeFrame:
+    """Minimal FrameSized stand-in (avoids needing real camera hardware)."""
+
+    def __init__(self, width: int, height: int):
+        self.width = width
+        self.height = height
 
 
 def test_center_box_maps_to_origin():
@@ -42,3 +53,19 @@ def test_offset_target_keeps_sign_convention():
 def test_non_positive_frame_size_raises(width, height):
     with pytest.raises(ValueError):
         bounding_box_to_coordinate(BoundingBox(0, 0, 1, 1), width, height)
+
+
+def test_in_frame_reads_dimensions_from_source():
+    box = BoundingBox(70, 10, 80, 30)  # center (75, 20)
+    frame = _FakeFrame(width=100, height=80)
+    coord = bounding_box_to_coordinate_in(box, frame)
+    assert coord.pos_x == pytest.approx(0.5)
+    assert coord.pos_y == pytest.approx(0.5)
+
+
+def test_in_frame_matches_explicit_call():
+    box = BoundingBox(10, 20, 50, 60)
+    frame = _FakeFrame(width=320, height=240)
+    assert bounding_box_to_coordinate_in(box, frame) == bounding_box_to_coordinate(
+        box, 320, 240
+    )

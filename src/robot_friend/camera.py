@@ -12,6 +12,16 @@ class Camera(ABC):
     def read(self) -> np.ndarray | None:
         """Return the next frame, or None if the source stopped."""
 
+    @property
+    @abstractmethod
+    def width(self) -> int:
+        """Frame width in pixels (the x-extent of frames from ``read``)."""
+
+    @property
+    @abstractmethod
+    def height(self) -> int:
+        """Frame height in pixels (the y-extent of frames from ``read``)."""
+
     @abstractmethod
     def close(self) -> None:
         pass
@@ -32,10 +42,21 @@ class OpenCVCamera(Camera):
         self._cap = cv2.VideoCapture(index)
         if not self._cap.isOpened():
             raise RuntimeError(f"cannot open camera index {index}")
+        # Cache the negotiated capture resolution; it does not change at runtime.
+        self._width = int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self._height = int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     def read(self) -> np.ndarray | None:
         ok, frame = self._cap.read()
         return frame if ok else None
+
+    @property
+    def width(self) -> int:
+        return self._width
+
+    @property
+    def height(self) -> int:
+        return self._height
 
     def close(self) -> None:
         self._cap.release()
@@ -53,9 +74,18 @@ class PiCamera(Camera):
         config = self._picam.create_video_configuration(main={"format": "RGB888", "size": size})
         self._picam.configure(config)
         self._picam.start()
+        self._width, self._height = size
 
     def read(self) -> np.ndarray | None:
         return self._picam.capture_array()
+
+    @property
+    def width(self) -> int:
+        return self._width
+
+    @property
+    def height(self) -> int:
+        return self._height
 
     def close(self) -> None:
         self._picam.stop()
