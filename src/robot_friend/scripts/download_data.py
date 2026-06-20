@@ -9,14 +9,15 @@ positional arguments to fetch only some — e.g. ``download_data.py vosk`` on th
 Pi, which runs Hailo for image detection (no YOLO) and Vosk for ASR.
 """
 
-import argparse
 import shutil
 import tempfile
 import urllib.request
 import zipfile
 from pathlib import Path
 
-from robot_friend.audio.backends.faster_whisper.whisper_audio_detector import WhisperModel
+from robot_friend.audio.backends.faster_whisper.whisper_audio_detector import (
+    WhisperModel,
+)
 from robot_friend.audio.backends.vosk.vosk_model import VoskModel
 from robot_friend.image.backends.ultralytics.yolo_detector import YOLOModel
 from robot_friend.resource_handler import (
@@ -25,6 +26,7 @@ from robot_friend.resource_handler import (
     get_yolo_model_dir,
 )
 from robot_friend.utils.finch_logger import finch_logger
+from robot_friend.utils.get_current_host import is_pi_host
 
 # Edit these lists to choose which assets to download.
 YOLO_MODELS = [YOLOModel.YOLO_V8N]
@@ -104,31 +106,7 @@ def _download_whisper(model: WhisperModel) -> None:
     download_model(model.value, output_dir=str(target))
 
 
-# Maps each asset group to the callable that fetches its configured models.
-GROUPS = {
-    "yolo": lambda: [_download_yolo(m) for m in YOLO_MODELS],
-    "vosk": lambda: [_download_vosk(m) for m in VOSK_MODELS],
-    "whisper": lambda: [_download_whisper(m) for m in WHISPER_MODELS],
-}
-
-
-def main(groups: list[str]) -> None:
-    """Fetch the models for each requested asset group.
-
-    Args:
-        groups: Asset-group names to fetch; each must be a key of ``GROUPS``.
-    """
-    for group in groups:
-        GROUPS[group]()
-
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "groups",
-        nargs="*",
-        choices=list(GROUPS),
-        default=list(GROUPS),
-        help="Asset groups to fetch (default: all).",
-    )
-    main(parser.parse_args().groups)
+    if not is_pi_host():
+        [_download_yolo(m) for m in YOLO_MODELS]
+    [_download_vosk(m) for m in VOSK_MODELS]
