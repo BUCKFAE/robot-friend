@@ -4,7 +4,7 @@ Sync producers (the camera loop, the sound-device callback, metric pollers) call
 :meth:`Bus.publish` from their own threads. The per-client NiceGUI page reads the
 most recent value with :meth:`Bus.latest` from a ``ui.timer`` poll, and optional
 callbacks fire synchronously on publish. This generalises the single-slot
-``threading.Condition`` fan-out that ``MJPEGServer`` used for one video stream.
+``threading.Condition`` fan-out the original single-stream video server used.
 
 Only lightweight metadata travels on the bus (numbers, short strings, dataclasses).
 High-rate media bypasses it: video goes over a dedicated MJPEG route, audio over a

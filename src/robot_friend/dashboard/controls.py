@@ -1,33 +1,58 @@
-"""Shared dashboard controls state.
+"""Dashboard controls — what the ControlPanel reads and writes.
 
-The NiceGUI control panel writes this object from the UI thread; background sources
-read it from worker threads. Keep it intentionally small and typed so adding more
-controls later is straightforward.
+:class:`ControlsBackend` is the interface the panel talks to. Two implementations let the
+same panel drive either a local demo or a live robot:
+
+* :class:`DashboardControls` — demo/local: enumerate *this* host's devices, keep the
+  selection in memory (nothing consumes it; the demo sources are synthetic).
+* :class:`~robot_friend.dashboard.controls_client.RobotControlsClient` — live: enumerate
+  and command the *robot* over HTTP.
+
+Device enumeration itself lives in :mod:`robot_friend.devices` (shared with the robot).
 """
 from __future__ import annotations
 
 import threading
-from collections.abc import Callable
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
+from abc import ABC, abstractmethod
 
+from robot_friend.devices import DeviceOption, camera_options, sound_options
 from robot_friend.utils.finch_logger import finch_logger
-from robot_friend.utils.get_current_host import is_pi_host
+
+# Re-export DeviceOption so panels keep importing it from here.
+__all__ = ["ControlsBackend", "DashboardControls", "DeviceOption"]
 
 
-@dataclass(frozen=True)
-class DeviceOption:
-    value: Any
-    label: str
+class ControlsBackend(ABC):
+    """Device options + current selection, readable and settable by the ControlPanel."""
+
+    @abstractmethod
+    def camera_options(self) -> list[DeviceOption]: ...
+
+    @abstractmethod
+    def sound_options(self) -> list[DeviceOption]: ...
+
+    @property
+    @abstractmethod
+    def camera_index(self) -> int: ...
+
+    @property
+    @abstractmethod
+    def sound_device(self) -> int | str | None: ...
+
+    @abstractmethod
+    def set_camera_index(self, index: int) -> None: ...
+
+    @abstractmethod
+    def set_sound_device(self, device: int | str | None) -> None: ...
 
 
-class DashboardControls:
+class DashboardControls(ControlsBackend):
+    """Demo/local backend: this host's devices, selection held in memory."""
+
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._camera_index = 0
         self._sound_device: int | str | None = None
-        self._sound_callbacks: list[Callable[[int | str | None], None]] = []
 
     @property
     def camera_index(self) -> int:
@@ -47,70 +72,14 @@ class DashboardControls:
         finch_logger.info("selected camera device: %s", index)
 
     def set_sound_device(self, device: int | str | None) -> None:
-        callbacks: list[Callable[[int | str | None], None]]
         with self._lock:
             if self._sound_device == device:
                 return
             self._sound_device = device
-            callbacks = list(self._sound_callbacks)
         finch_logger.info("selected sound device: %s", device)
-        for callback in callbacks:
-            callback(device)
-
-    def on_sound_device_changed(
-        self, callback: Callable[[int | str | None], None]
-    ) -> None:
-        with self._lock:
-            self._sound_callbacks.append(callback)
 
     def camera_options(self) -> list[DeviceOption]:
-        if is_pi_host():
-            return [DeviceOption(0, "Pi camera")]
-
-        video_devices = sorted(Path("/dev").glob("video[0-9]*"))
-        indexes = [
-            int(path.name.removeprefix("video"))
-            for path in video_devices
-            if path.name.removeprefix("video").isdigit()
-        ]
-        if not indexes:
-            return [DeviceOption(self.camera_index, f"Camera {self.camera_index}")]
-
-        try:
-            import cv2
-        except Exception as exc:
-            finch_logger.warning("could not enumerate cameras: %s", exc)
-            return [DeviceOption(self.camera_index, f"Camera {self.camera_index}")]
-
-        options: list[DeviceOption] = []
-        for index in indexes:
-            cap = cv2.VideoCapture(index)
-            try:
-                if cap.isOpened():
-                    label = f"Camera {index}"
-                    options.append(DeviceOption(index, label))
-            finally:
-                cap.release()
-        if not options:
-            options.append(DeviceOption(self.camera_index, f"Camera {self.camera_index}"))
-        return options
+        return camera_options(self.camera_index)
 
     def sound_options(self) -> list[DeviceOption]:
-        try:
-            import sounddevice
-        except Exception as exc:
-            finch_logger.warning("could not enumerate sound devices: %s", exc)
-            return [DeviceOption(None, "Default input")]
-
-        try:
-            devices = sounddevice.query_devices()
-        except Exception as exc:
-            finch_logger.warning("could not query sound devices: %s", exc)
-            return [DeviceOption(None, "Default input")]
-
-        options = [
-            DeviceOption(index, f"{index}: {info['name']}")
-            for index, info in enumerate(devices)
-            if info["max_input_channels"] > 0
-        ]
-        return options or [DeviceOption(None, "Default input")]
+        return sound_options()

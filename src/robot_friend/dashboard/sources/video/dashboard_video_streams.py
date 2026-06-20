@@ -16,8 +16,9 @@ import numpy as np
 from fastapi import Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 
+from robot_friend.utils.jpeg import encode_jpeg
+
 _BOUNDARY = "frame"
-_JPEG_QUALITY = 80
 
 
 class VideoStreams:
@@ -132,11 +133,6 @@ class VideoStreams:
                     "X-Frame-Seq": str(seq),
                 },
             )
-
-
-def encode_jpeg(frame: np.ndarray) -> bytes:
-    ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, _JPEG_QUALITY])
-    return buf.tobytes() if ok else b""
 
 
 @functools.lru_cache(maxsize=1)

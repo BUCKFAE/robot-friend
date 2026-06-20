@@ -3,24 +3,35 @@ import os
 
 from nicegui import app, ui
 
-from robot_friend.dashboard.app import bus, controls, logs, streams
+from robot_friend.dashboard import app as dashboard_app
+from robot_friend.dashboard.app import bus, logs, streams
+from robot_friend.dashboard.controls_client import RobotControlsClient
 from robot_friend.dashboard.dashboard_scenario import DashboardDemoScenario
 from robot_friend.dashboard.sources.data_source import DashboardDataSource
 from robot_friend.dashboard.sources.dataclass import FakeDataclassSource
 from robot_friend.dashboard.sources.logs import FakeLogSource, LogSource
-from robot_friend.dashboard.sources.audio import AudioSource
+from robot_friend.dashboard.sources.robot_log_source import RobotLogSource
+from robot_friend.dashboard.sources.telemetry_source import TelemetrySource
 from robot_friend.dashboard.sources.video import SCENARIOS, FakeVideoSource, VideoSource
 from robot_friend.utils.finch_logger.finch_logger import finch_logger
 
 
-def _build_sources(scenario: str | None) -> list[DashboardDataSource]:
+def _build_sources(scenario: str | None, robot_url: str) -> list[DashboardDataSource]:
     if scenario:
         return [
             FakeVideoSource(streams, scenario=scenario),
             FakeLogSource(logs, scenario=scenario),
             FakeDataclassSource(scenario=scenario),
         ]
-    return [VideoSource(streams, controls), AudioSource(controls), LogSource(logs)]
+    # Live mode: attach to the running robot. Video is proxied from its MJPEG streams;
+    # detections/perf/transcript come over telemetry; the Logs panel merges the robot's
+    # own logs (RobotLogSource) with the dashboard's connection logs (LogSource).
+    return [
+        VideoSource(streams, robot_url),
+        TelemetrySource(robot_url),
+        RobotLogSource(logs, robot_url),
+        LogSource(logs),
+    ]
 
 
 def main() -> None:
@@ -35,11 +46,19 @@ def main() -> None:
     parser.add_argument(
         "--port", type=int, default=int(os.environ.get("DASHBOARD_PORT", "8080"))
     )
+    parser.add_argument(
+        "--robot-url",
+        default=os.environ.get("ROBOT_URL", "http://localhost:8081"),
+        help="Base URL of the running robot (robot_friend.main) to attach to in live mode",
+    )
     args = parser.parse_args()
 
     dashboard_scenario = _scenario_name(args.demo_scenario) if args.demo_scenario else None
     finch_logger.info("Demo scenario: %s", dashboard_scenario)
-    sources = _build_sources(dashboard_scenario)
+    if dashboard_scenario is None:
+        # Live: drive the ControlPanel against the robot (enumerate + command its devices).
+        dashboard_app.controls = RobotControlsClient(args.robot_url)
+    sources = _build_sources(dashboard_scenario, args.robot_url)
 
     @app.on_startup
     def _start_sources() -> None:

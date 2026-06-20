@@ -4,7 +4,7 @@ from __future__ import annotations
 from nicegui import ui
 
 from robot_friend.dashboard.bus import Bus
-from robot_friend.dashboard.controls import DashboardControls, DeviceOption
+from robot_friend.dashboard.controls import ControlsBackend, DeviceOption
 from robot_friend.dashboard.panels.panel import Panel, register
 
 
@@ -13,7 +13,7 @@ class ControlPanel(Panel):
     def __init__(
         self,
         bus: Bus,
-        controls: DashboardControls,
+        controls: ControlsBackend,
         *,
         title: str | None = "Controls",
     ) -> None:
