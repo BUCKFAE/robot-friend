@@ -7,7 +7,9 @@ import cv2
 
 from robot_friend.camera import open_camera
 from robot_friend.control import RobotControls
-from robot_friend.exceptions.missing_hardware_exception import MissingSoundDeviceException
+from robot_friend.exceptions.missing_hardware_exception import (
+    MissingSoundDeviceException,
+)
 from robot_friend.image.image_detector_factory import ImageDetectorFactory
 from robot_friend.robot_server import RobotServer
 from robot_friend.telemetry.store import TelemetryStore
@@ -50,7 +52,9 @@ def _run_audio(
                 store.set_transcript(transcript)
         except MissingSoundDeviceException as exc:
             if not no_mic_logged:
-                finch_logger.warning("no microphone; running vision-only (will retry): %s", exc)
+                finch_logger.warning(
+                    "no microphone; running vision-only (will retry): %s", exc
+                )
                 no_mic_logged = True
             wakeup.wait(2.0)
         except Exception:
@@ -70,7 +74,7 @@ def _run_vision(
     Re-opens the camera when the selected index changes, so the dashboard can switch
     cameras via ``POST /control`` (a no-op on the single-camera Pi, but useful on dev).
     """
-    headless = is_pi_host()
+    headless = is_pi_host() or True
     active_index: int | None = None
     camera = None
     last = time.monotonic()
@@ -84,7 +88,9 @@ def _run_vision(
                 try:
                     camera = open_camera(active_index)
                 except Exception as exc:
-                    finch_logger.warning("could not open camera %s: %s", active_index, exc)
+                    finch_logger.warning(
+                        "could not open camera %s: %s", active_index, exc
+                    )
                     camera = None
                     time.sleep(1.0)
                     continue
@@ -112,14 +118,19 @@ def _run_vision(
             server.publish("raw", frame)
             annotated = frame.copy()
             for b in boxes:
-                cv2.rectangle(annotated, (b.bounding_box.x1, b.bounding_box.y1),
-                              (b.bounding_box.x2, b.bounding_box.y2), _BGR_GREEN, 2)
+                cv2.rectangle(
+                    annotated,
+                    (b.bounding_box.x1, b.bounding_box.y1),
+                    (b.bounding_box.x2, b.bounding_box.y2),
+                    _BGR_GREEN,
+                    2,
+                )
             server.publish("annotated", annotated)
             store.set_vision(list(boxes), round(fps, 1), round(detect_ms, 1))
 
             if not headless:
-                cv2.imshow('presence', annotated)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
+                cv2.imshow("presence", annotated)
+                if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
     except KeyboardInterrupt:
         pass
@@ -131,9 +142,14 @@ def _run_vision(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description='robot-friend person detection')
-    parser.add_argument('--port', type=int, metavar='PORT', default=8081,
-                        help="Port to serve MJPEG video + JSON telemetry on")
+    parser = argparse.ArgumentParser(description="robot-friend person detection")
+    parser.add_argument(
+        "--port",
+        type=int,
+        metavar="PORT",
+        default=8081,
+        help="Port to serve MJPEG video + JSON telemetry on",
+    )
     args = parser.parse_args()
 
     detector = ImageDetectorFactory.get_image_detector()
@@ -150,8 +166,13 @@ def main() -> None:
     # here depends on a dashboard: endpoints are inert until someone calls them.
     server = RobotServer(args.port)
     server.on_get("/telemetry.json", lambda _query: store.to_json())
-    server.on_get("/logs.json", lambda query: logs_since_json(log_stream, int(query.get("since", "0"))))
-    server.on_get("/devices.json", lambda _query: json.dumps(controls.devices_payload()).encode())
+    server.on_get(
+        "/logs.json",
+        lambda query: logs_since_json(log_stream, int(query.get("since", "0"))),
+    )
+    server.on_get(
+        "/devices.json", lambda _query: json.dumps(controls.devices_payload()).encode()
+    )
     server.on_post("/control", lambda body: controls.apply(body))
     finch_logger.info(
         "serving on http://0.0.0.0:%s/ (video, telemetry, logs, devices, POST /control)",
@@ -162,7 +183,10 @@ def main() -> None:
     stop = threading.Event()
     audio_wakeup = threading.Event()
     threading.Thread(
-        target=_run_audio, args=(store, controls, stop, audio_wakeup), daemon=True, name="audio"
+        target=_run_audio,
+        args=(store, controls, stop, audio_wakeup),
+        daemon=True,
+        name="audio",
     ).start()
 
     try:
