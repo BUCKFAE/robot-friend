@@ -11,6 +11,7 @@ from __future__ import annotations
 import time
 from collections.abc import Iterable
 from dataclasses import dataclass
+from enum import Enum
 
 from robot_friend.servo.pwm_driver import PwmDriver
 from robot_friend.utils.finch_logger import finch_logger
@@ -36,6 +37,26 @@ class ServoConfig:
     mid_us: float = 1500.0
     max_us: float = 2000.0
     moving_max_ms: float = 200.0
+
+
+class ServoModel(Enum):
+    """Known servo models; each value is the :class:`ServoConfig` for that model.
+
+    Use :attr:`config` to get the model's pulse/range parameters when building a
+    :class:`Servo` or :class:`ServoSpec`.
+    """
+
+    SG90 = ServoConfig(
+        max_angle=180.0,
+        min_us=500.0,
+        mid_us=1500.0,
+        max_us=2500.0,
+        moving_max_ms=200.0,
+    )
+
+    @property
+    def config(self) -> ServoConfig:
+        return self.value
 
 
 @dataclass(frozen=True)

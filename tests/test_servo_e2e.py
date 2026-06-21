@@ -6,12 +6,14 @@ import json
 from robot_friend.dashboard.servos_client import RobotServosClient
 from robot_friend.robot_server import RobotServer
 from robot_friend.servo.backends.fake.fake_pwm_driver import FakePwmDriver
+from robot_friend.servo.servo import ServoModel
 from robot_friend.servo.servo_controller import ServoController, ServoSpec
 
 
 def test_dashboard_reads_servos_and_commands_an_angle():
     controller = ServoController(
-        FakePwmDriver(pwm_freq_hz=50), [ServoSpec(0, "pan"), ServoSpec(1, "tilt")]
+        FakePwmDriver(pwm_freq_hz=50),
+        [ServoSpec(0, "pan", ServoModel.SG90), ServoSpec(1, "tilt", ServoModel.SG90)],
     )
     server = RobotServer(0)
     server.on_get("/servos.json", lambda _q: json.dumps(controller.snapshot()).encode())

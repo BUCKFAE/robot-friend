@@ -8,12 +8,12 @@ servo path with no hardware.
 from __future__ import annotations
 
 import threading
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from typing import Any
 
 from robot_friend.servo.pwm_driver import PwmDriver
 from robot_friend.servo.pwm_driver_factory import PwmDriverFactory
-from robot_friend.servo.servo import Servo, ServoConfig, ServoState
+from robot_friend.servo.servo import Servo, ServoModel, ServoState
 from robot_friend.utils.finch_logger import finch_logger
 
 
@@ -24,17 +24,17 @@ class ServoSpec:
     Attributes:
         channel: PCA9685 channel the servo is connected to.
         label: Human-readable name shown in the dashboard.
-        config: Pulse/range tuning for the servo model.
+        model: Servo model whose pulse/range tuning is used (see :class:`ServoModel`).
     """
     channel: int
     label: str
-    config: ServoConfig = field(default_factory=ServoConfig)
+    model: ServoModel
 
 
 #: The robot's servos. Minimal starter layout — edit to match your build (channel/label/model).
 DEFAULT_SERVOS: list[ServoSpec] = [
-    ServoSpec(channel=0, label="pan"),
-    ServoSpec(channel=1, label="tilt"),
+    ServoSpec(channel=0, label="pan", model=ServoModel.SG90),
+    ServoSpec(channel=1, label="tilt", model=ServoModel.SG90),
 ]
 
 
@@ -51,7 +51,7 @@ class ServoController:
         self._lock = threading.Lock()
         self._driver = driver
         self._servos: dict[int, Servo] = {
-            spec.channel: Servo(driver, spec.channel, spec.config, label=spec.label)
+            spec.channel: Servo(driver, spec.channel, spec.model.config, label=spec.label)
             for spec in specs
         }
         if center_on_start:

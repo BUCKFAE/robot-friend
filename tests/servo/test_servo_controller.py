@@ -2,6 +2,7 @@
 import json
 
 from robot_friend.servo.backends.fake.fake_pwm_driver import FakePwmDriver
+from robot_friend.servo.servo import ServoModel
 from robot_friend.servo.servo_controller import ServoController, ServoSpec
 
 _STATE_KEYS = {
@@ -17,7 +18,10 @@ _STATE_KEYS = {
 
 def _controller() -> ServoController:
     driver = FakePwmDriver(pwm_freq_hz=50)
-    return ServoController(driver, [ServoSpec(0, "pan"), ServoSpec(1, "tilt")])
+    return ServoController(
+        driver,
+        [ServoSpec(0, "pan", ServoModel.SG90), ServoSpec(1, "tilt", ServoModel.SG90)],
+    )
 
 
 def test_centers_servos_on_start():
