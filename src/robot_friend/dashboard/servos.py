@@ -13,12 +13,64 @@ Mirrors the camera/mic :class:`ControlsBackend` split in :mod:`robot_friend.dash
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, replace
 
 from robot_friend.servo.servo import ServoState
 from robot_friend.servo.servo_controller import ServoController
 
 # Re-export ServoState so the panel/client import it from here.
-__all__ = ["ServoBackend", "DashboardServos", "ServoState"]
+__all__ = [
+    "ServoBackend",
+    "DashboardServos",
+    "ServoState",
+    "ServoSnapshot",
+    "SERVOS_STATE_CHANNEL",
+    "with_angle",
+    "with_calibration",
+]
+
+#: Bus channel the ServoPanel syncs its shared state on (see :mod:`.panels.state_sync`).
+SERVOS_STATE_CHANNEL = "servos.state"
+
+
+@dataclass(frozen=True)
+class ServoSnapshot:
+    """Everything the ServoPanel renders, broadcast as one value across clients.
+
+    Attributes:
+        states: Every servo's current state (a tuple so the snapshot is immutable and
+            compares by value, which the sync layer relies on to dedupe).
+        driver: Active driver name (e.g. ``FakePwmDriver``), shown in the panel.
+    """
+    states: tuple[ServoState, ...]
+    driver: str
+
+
+def with_angle(snapshot: ServoSnapshot, channel: int, angle: float) -> ServoSnapshot:
+    """Return ``snapshot`` with ``channel``'s angle replaced.
+
+    The optimistic snapshot a panel broadcasts the instant a slider is released — peers
+    update without anyone re-reading the backend (cheap locally, no extra HTTP live).
+    """
+    return replace(
+        snapshot,
+        states=tuple(
+            replace(s, angle=angle) if s.channel == channel else s for s in snapshot.states
+        ),
+    )
+
+
+def with_calibration(
+    snapshot: ServoSnapshot, channel: int, calibration: float
+) -> ServoSnapshot:
+    """Return ``snapshot`` with ``channel``'s mid-point trim replaced (see :func:`with_angle`)."""
+    return replace(
+        snapshot,
+        states=tuple(
+            replace(s, calibration=calibration) if s.channel == channel else s
+            for s in snapshot.states
+        ),
+    )
 
 
 class ServoBackend(ABC):
@@ -36,6 +88,14 @@ class ServoBackend(ABC):
     @abstractmethod
     def driver_label(self) -> str:
         """Name of the active backend driver (e.g. ``FakePwmDriver``), shown in the UI."""
+
+    def snapshot(self) -> ServoSnapshot:
+        """States + driver name — the snapshot the panel syncs across clients.
+
+        Concrete on the interface (mirrors :meth:`ControlsBackend.selection`): a single
+        read covers both, so the live HTTP client fetches once rather than twice.
+        """
+        return ServoSnapshot(states=tuple(self.servos()), driver=self.driver_label())
 
 
 class DashboardServos(ServoBackend):

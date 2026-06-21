@@ -14,12 +14,37 @@ from __future__ import annotations
 
 import threading
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 from robot_friend.devices import DeviceOption, camera_options, sound_options
 from robot_friend.utils.finch_logger import finch_logger
 
 # Re-export DeviceOption so panels keep importing it from here.
-__all__ = ["ControlsBackend", "DashboardControls", "DeviceOption"]
+__all__ = [
+    "ControlsBackend",
+    "DashboardControls",
+    "DeviceOption",
+    "ControlSelection",
+    "CONTROLS_STATE_CHANNEL",
+]
+
+#: Bus channel the ControlPanel syncs its shared state on (see :mod:`.panels.state_sync`).
+CONTROLS_STATE_CHANNEL = "controls.state"
+
+
+@dataclass(frozen=True)
+class ControlSelection:
+    """The device selection shared across dashboard clients.
+
+    Only the *selection* is synced — device enumeration (which probes cameras/mics) stays
+    behind the panel's "Refresh devices" button, off the live-update path.
+
+    Attributes:
+        camera_index: Selected webcam index.
+        sound_device: Selected sound-input device (index, name, or None for the default).
+    """
+    camera_index: int
+    sound_device: int | str | None
 
 
 class ControlsBackend(ABC):
@@ -44,6 +69,13 @@ class ControlsBackend(ABC):
 
     @abstractmethod
     def set_sound_device(self, device: int | str | None) -> None: ...
+
+    def selection(self) -> ControlSelection:
+        """Current selection — the snapshot the panel syncs across clients."""
+        return ControlSelection(
+            camera_index=self.camera_index,
+            sound_device=self.sound_device,
+        )
 
 
 class DashboardControls(ControlsBackend):
