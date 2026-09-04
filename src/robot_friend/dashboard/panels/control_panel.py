@@ -7,9 +7,12 @@ the "Refresh devices" button — it probes hardware and is per-client, off the l
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
+from typing import Any
 
 from nicegui import ui
+from nicegui.events import ValueChangeEventArguments
 
 from robot_friend.dashboard.bus import Bus
 from robot_friend.dashboard.controls import (
@@ -37,18 +40,18 @@ class ControlPanel(Panel):
 
     def build(self) -> None:
         with ui.column().classes("w-full").style("gap:0.5rem"):
-            self._camera_select = ui.select(
-                _options(self._controls.camera_options()),
-                value=self._controls.camera_index,
-                label="Webcam",
-                on_change=lambda e: self._commit_camera(e.value),
-            ).classes("w-full").props("dense outlined")
-            self._sound_select = ui.select(
-                _options(self._controls.sound_options()),
-                value=self._controls.sound_device,
-                label="Sound input",
-                on_change=lambda e: self._commit_sound(e.value),
-            ).classes("w-full").props("dense outlined")
+            self._camera_select = _device_select(
+                "Webcam",
+                self._controls.camera_options(),
+                self._controls.camera_index,
+                lambda e: self._commit_camera(e.value),
+            )
+            self._sound_select = _device_select(
+                "Sound input",
+                self._controls.sound_options(),
+                self._controls.sound_device,
+                lambda e: self._commit_sound(e.value),
+            )
             ui.button("Refresh devices", on_click=self._refresh_devices).props(
                 "flat dense no-caps"
             )
@@ -82,16 +85,55 @@ class ControlPanel(Panel):
 
     # --- inbound peer selection -> widgets -----------------------------------
     def _apply(self, selection: ControlSelection) -> None:
-        if self._camera_select.value != selection.camera_index:
-            self._camera_select.value = selection.camera_index
-        if self._sound_select.value != selection.sound_device:
-            self._sound_select.value = selection.sound_device
+        _apply_value(self._camera_select, selection.camera_index)
+        _apply_value(self._sound_select, selection.sound_device)
 
     def _refresh_devices(self) -> None:
-        self._camera_select.options = _options(self._controls.camera_options())
-        self._camera_select.update()
-        self._sound_select.options = _options(self._controls.sound_options())
-        self._sound_select.update()
+        _set_options(self._camera_select, self._controls.camera_options())
+        _set_options(self._sound_select, self._controls.sound_options())
+
+
+def _device_select(
+    label: str,
+    options: list[DeviceOption],
+    selected: Any,
+    on_change: Callable[[ValueChangeEventArguments], None],
+) -> ui.select:
+    """Build a device select that tolerates the device not being there.
+
+    ``ui.select`` raises on an initial value that is not one of its options, and that
+    would abort the whole page render. Absent devices are a normal state: live mode seeds
+    the selects from the robot's selection, so an unreachable robot enumerates nothing
+    while still reporting a selected camera index, and a device can disappear between two
+    page loads. Either way the panel renders with an empty, disabled select that the
+    "Refresh devices" button can repopulate.
+    """
+    choices = _options(options)
+    select = (
+        ui.select(
+            choices,
+            value=selected if selected in choices else None,
+            label=label,
+            on_change=on_change,
+        )
+        .classes("w-full")
+        .props("dense outlined")
+    )
+    select.set_enabled(bool(choices))
+    return select
+
+
+def _set_options(select: ui.select, options: list[DeviceOption]) -> None:
+    """Re-enumerate ``select``: ``set_options`` drops a selection that is no longer
+    offered, so an unplugged device clears instead of sticking around as a phantom."""
+    select.set_options(_options(options))
+    select.set_enabled(bool(select.options))
+
+
+def _apply_value(select: ui.select, value: Any) -> None:
+    """Mirror a peer's selection onto ``select``, skipping a device it does not offer."""
+    if select.value != value and value in select.options:
+        select.value = value
 
 
 def _options(options: list[DeviceOption]) -> dict:

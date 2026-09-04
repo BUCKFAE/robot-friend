@@ -100,6 +100,13 @@ dashboard: upload _kill-remote
   exit "$rc"
 
 
+# Interactive, so ssh gets a tty: you turn the sensor over between prompts. The result
+# lands in the Pi's data/ (rsync-excluded), so `just pi::upload` will not overwrite it.
+#
+# Calibrate the Pi's accelerometer.
+calibrate: upload
+  ssh -t {{host}} '{{pi_env}} cd {{remote_dir}} && just sync && uv run robot-friend-calibrate'
+
 # Watch the raw Pi camera with no robot-friend code: H.264 TCP stream from the Pi, viewed here.
 stream port="8554":
   #!/usr/bin/env bash

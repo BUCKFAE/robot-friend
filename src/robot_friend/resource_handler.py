@@ -29,6 +29,19 @@ def get_log_dir() -> Path:
     return _get_data_dir() / 'logs'
 
 
+def get_calibration_dir() -> Path:
+    return _get_data_dir() / 'calibration'
+
+
+def get_accelerometer_calibration_file() -> Path:
+    """Where a measured accelerometer calibration is kept.
+
+    Under ``data/``, so it is neither committed nor overwritten by ``just pi::upload``:
+    the numbers describe one physical part, and the Pi's copy is the real one.
+    """
+    return get_calibration_dir() / 'accelerometer.json'
+
+
 def get_dashboard_static_dir() -> Path:
     return Path(__file__).parent / 'dashboard' / 'static'
 

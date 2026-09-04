@@ -6,7 +6,7 @@ unchanged with no hardware. Mirrors :class:`ImageDetectorFactory`.
 """
 from __future__ import annotations
 
-from robot_friend.exceptions.missing_hardware_exception import MissingI2cBusException
+from robot_friend.exceptions.missing_hardware_exception import MissingHardwareException
 from robot_friend.servo.pwm_driver import PwmDriver
 from robot_friend.utils.finch_logger import finch_logger
 from robot_friend.utils.get_current_host import is_pi_host
@@ -29,12 +29,14 @@ class PwmDriverFactory:
             pwm_freq_hz: PWM refresh rate for whichever backend is chosen.
         """
         if is_pi_host():
+            from robot_friend.i2c.backends.smbus.smbus_i2c_device import SmbusI2cDevice
             from robot_friend.servo.backends.pca9685.pca9685_pwm_driver import (
                 Pca9685PwmDriver,
             )
             try:
-                return Pca9685PwmDriver(bus=bus, address=address, pwm_freq_hz=pwm_freq_hz)
-            except MissingI2cBusException as exc:
+                device = SmbusI2cDevice(address=address, bus=bus)
+                return Pca9685PwmDriver(device, pwm_freq_hz=pwm_freq_hz)
+            except MissingHardwareException as exc:
                 # I2C disabled or no board wired: fall back so the robot still runs (and the
                 # dashboard still renders) without servos, rather than crashing the process.
                 finch_logger.warning("PCA9685 unavailable (%s); using FakePwmDriver", exc)

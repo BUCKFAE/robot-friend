@@ -40,3 +40,10 @@ listen *args:
 # Run the dashboard web UI. `--demo-scenario nominal` = fake data, no hardware.
 dashboard *args:
   uv run robot-friend-dashboard {{args}}
+
+# Interactive: you hold the sensor in six orientations. Needs the real sensor, so on
+# the Pi it is `just pi::calibrate`.
+#
+# Measure and store this robot's accelerometer offset + sensitivity.
+calibrate *args:
+  uv run robot-friend-calibrate {{args}}

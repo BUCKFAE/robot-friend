@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "colorlog>=6.10.1",
+    "nicegui>=3.13.0",
     "numpy>=1.26",
     "opencv-python>=4.13.0.92",
     "smbus3>=0.5.5",
@@ -43,6 +44,7 @@ dashboard = [
 robot-friend = "robot_friend.main:main"
 robot-friend-audio = "robot_friend.audio.audio_testing:main"
 robot-friend-dashboard = "robot_friend.dashboard.main:main"
+robot-friend-calibrate = "robot_friend.scripts.calibrate_accelerometer:main"
 
 [dependency-groups]
 dev = [
